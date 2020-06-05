@@ -8,7 +8,7 @@ args = parser.parse_args()
 
 with open(args.bib) as fp:
     text = fp.read()
-    available_keys = set(key.strip() for key in re.findall('@\w+{([^-].*?),', text))
+    available_keys = set(key.strip() for key in re.findall(r'@\w+{([^-].*?),', text))
 
 with open(args.aux) as fp:
     text = fp.read()
@@ -16,5 +16,5 @@ with open(args.aux) as fp:
 
 print(f'found {len(available_keys)} available keys')
 print(f'found {len(used_keys)} used keys')
-print(f'unused keys:')
+print('unused keys:')
 print('\n'.join(sorted(available_keys - used_keys)))
