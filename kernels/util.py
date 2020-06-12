@@ -1,8 +1,5 @@
 """
-``.util``
----------
-
-The ``.util`` module provides utility functions, including evaluation of the case-control log
+This module provides utility functions, including evaluation of the case-control log
 likelihood function and a Metropolis-Hastings Monte Carlo sampler.
 """
 

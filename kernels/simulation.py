@@ -1,9 +1,6 @@
 """
-``.simulation``
----------------
-
-The ``simulation`` module provides functions to generate synthetic datasets which can be used to
-test inference algorithms.
+This module provides functions to generate synthetic datasets which can be used to test inference
+algorithms.
 """
 
 import numpy as np
