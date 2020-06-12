@@ -6,8 +6,13 @@ likelihood function and a Metropolis-Hastings Monte Carlo sampler.
 import functools as ft
 import gc
 import inspect
+import logging
 import numpy as np
+import os
 from scipy import special
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def negate(func):
@@ -347,8 +352,53 @@ def sample_controls(egos, n):
     """
     # Check we can sample as many pairs as requested
     nmax = len(egos) * (len(egos) - 1) // 2
+    # Check we can actually sample all candidates
+    if nmax < n:
+        raise ValueError('cannot sample %d items from %d items' % (n, nmax))
     # Sample indices from the "flattened" pairs (cf. scipy.spatial.distance.squareform)
-    idx = np.random.choice(nmax, n, False)
+    # Use different sampling depending on the relative size of the sample and the number of possible
+    # samples (cf. https://github.com/numpy/numpy/issues/2764)
+    if nmax < 3 * n:
+        LOGGER.debug('sampling %d items from %d items using permutation', n, nmax)
+        idx = np.random.choice(nmax, n, False)
+    else:
+        LOGGER.debug('sampling %d items from %d items using rejection', n, nmax)
+        idx = set()
+        while len(idx) < n:
+            idx.add(np.random.randint(nmax))
+        idx = np.fromiter(idx, int)
+
     # Convert to indices
     i, j = condensed_to_square(idx, len(egos))
     return egos[i], egos[j]
+
+
+def add_logging_argument(parser, default='info'):
+    """
+    Add a ``log-level`` argument to a parser.
+    """
+    def _parse(level):
+        logging.basicConfig(level=level.upper())
+        return level
+
+    parser.add_argument(
+        '--log-level', '-l', choices=['debug', 'info', 'warning', 'error', 'fatal'],
+        help='log level for the script', default=default, type=_parse,
+    )
+
+
+def ensure_directory_exists(filename):
+    """
+    Make sure that the directory of the filename exists.
+    """
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    return filename
+
+
+def label_axes(axes, x=0.05, y=0.95, va='top', offset=0, **kwargs):
+    """
+    Attach alphabetical labels to a sequence of axes.
+    """
+    for i, ax in enumerate(np.ravel(axes)):
+        char = bytes([int.from_bytes(b'a', 'little') + i + offset]).decode()
+        ax.text(x, y, '(%s)' % char, va=va, transform=ax.transAxes, **kwargs)
