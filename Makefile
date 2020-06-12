@@ -1,4 +1,13 @@
-.PHONY : data tests clean docs build figures
+# Generate distance samples
+workspace/uk_distance_samples-$(NUM_DISTANCE_SAMPLES).txt : \
+		data/lsoa_boundaries_2011/LSOA_2011_EW_BGC_V2.shp \
+		data/lsoa_boundaries_2011/SOA2011.shp \
+		data/lsoa_boundaries_2011/SG_DataZone_Bdry_2011.shp \
+		data/lsoa_population_2012/mid-2012-lsoa-syoa-unformatted-file.xls \
+		data/lsoa_population_2012/2012-sape-t2a-corrected.xlsx \
+		data/lsoa_population_2012/SAPE_SOA_0114.xls
+	python scripts/sample_uk_distances.py --log-level=$(LOG_LEVEL) $(NUM_DISTANCE_SAMPLES)
+
 
 # Code stuff =======================================================================================
 
