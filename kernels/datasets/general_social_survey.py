@@ -149,7 +149,9 @@ def load_general_social_survey(filename):
     +---------------+--------------+-------------------+-----------------+
     | None          | 4            | None              | 4               |
     +---------------+--------------+-------------------+-----------------+
-    | Other         | 5            | Buddhism          | 6               |
+    | Other         | 5            | Other             | 5               |
+    |               |              +-------------------+-----------------+
+    |               |              | Buddhism          | 6               |
     |               |              +-------------------+-----------------+
     |               |              | Hinduism          | 7               |
     |               |              +-------------------+-----------------+
@@ -217,16 +219,24 @@ def load_general_social_survey(filename):
         # Remap values to ensure consistency with the alters as described in the docstring
         ego = util.recode(ego, **util.expand_mappings(**{
             'racecen1': {
-                (4, 5, 6, 7, 8, 9, 10): 1,  # Asian
-                2: 2,  # Black
-                16: 3,  # Hispanic
-                1: 4,  # White
-                (3, 11, 12, 13, 14, 15): 5,  # Other
+                (4, 5, 6, 7, 8, 9, 10): 'asian',
+                2: 'black',
+                16: 'hispanic',
+                1: 'white',
+                (3, 11, 12, 13, 14, 15): 'other',
             },
             'relig': {
                 # Protestant, Catholic, Jewish, and None are consistently coded
-                (6, 7, 8, 9, 10, 11, 12, 13): 5,  # Other
+                1: 'protestant',
+                2: 'catholic',
+                3: 'jewish',
+                4: 'none',
+                (5, 6, 7, 8, 9, 10, 11, 12, 13): 'other',  # Other
             },
+            'sex': {
+                1: 'male',
+                2: 'female',
+            }
         }))
         ego['ethnicity'] = ego.pop('racecen1')
 
@@ -281,11 +291,31 @@ def load_general_social_survey(filename):
             if any(types[key] for key in family) or not types['friend']:
                 continue
 
+            alter = util.recode(alter, relig={
+                1: 'protestant',
+                2: 'catholic',
+                3: 'jewish',
+                4: 'none',
+                5: 'other',
+            }, ethnicity={
+                1: 'asian',
+                2: 'black',
+                3: 'hispanic',
+                4: 'white',
+                5: 'other',
+            }, sex={
+                1: 'male',
+                2: 'female',
+            })
+
             alter_idx = len(z)
             z.append(alter)
             pairs.append((alter_idx, ego_idx))
             alters.append(alter_idx)
 
+    # TODO: recode values into something interpretable, like "male" instead of `1`
+
+    # TODO transfer one level up
     LOGGER.info('skipped %d egos', len(egos_skipped))
     LOGGER.info('skipped %d alters', len(alters_skipped))
 
@@ -294,6 +324,6 @@ def load_general_social_survey(filename):
         'egos': egos,
         'pairs': pairs,
         'weights': 'wtss',
-        'n': 292.8e6,
+        'n': 292.8e6,  # https://www.google.com/search?q=2004+us+population
         'feature_map': general_social_survey_feature_map,
     }

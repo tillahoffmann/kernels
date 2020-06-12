@@ -34,17 +34,19 @@ def _parse_seed(value):
 # Boilerplate --------------------------------------------------------------------------------------
 
 parser = argparse.ArgumentParser()
-parser.add_argument('dataset', choices=['alp', 'gss', 'synthetic'],
+kernels.util.add_logging_argument(parser)
+parser.add_argument('dataset', choices=['alp', 'gss', 'synthetic', 'usoc_c', 'usoc_f'],
                     help='dataset to run inference on')
 parser.add_argument('--num_samples', '-n', type=int, default=10000,
                     help='number of posterior samples')
-parser.add_argument('--log-level', choices=['info', 'debug'], default='info')
 parser.add_argument('--filename', '-f', help='filename to store results')
 parser.add_argument('--seed', '-s', type=_parse_seed, help='random number generator seed')
 parser.add_argument('--prior', '-p', choices=['flat', 'cauchy'], default='cauchy',
                     help='prior for kernel parameters')
 parser.add_argument('--force', '-B', action='store_true', default=False,
                     help='reevaluate inference even if results are present')
+parser.add_argument('--distance-filename', help='file from which to load sampled distances between '
+                    'individuals')
 args = parser.parse_args()
 
 # General setup
@@ -57,7 +59,9 @@ for seed in args.seed or [None]:
     arghash = hashlib.sha1()
     config = dict(vars(args))
     config['seed'] = seed
+    # Remove arguments that don't affect the processing
     config.pop('force', None)
+    config.pop('log_level', None)
     for key, value in sorted(config.items()):
         arghash.update(key.encode())
         arghash.update(repr(value).encode())
@@ -66,7 +70,7 @@ for seed in args.seed or [None]:
     logging.info('using configuration with hash %s: %s', arghash, config)
 
     filename = args.filename or f'workspace/{args.dataset}/{arghash}.pkl'
-    if os.path.isfile(filename) and not args.force and seed:
+    if os.path.isfile(filename) and not args.force and seed is not None:
         logging.info('skipping %s as results are already present', filename)
         continue
 
@@ -74,6 +78,10 @@ for seed in args.seed or [None]:
     logging.info('seeded with %s', seed)
 
     # Load the data --------------------------------------------------------------------------------
+
+    need_distances = args.dataset.startswith('usoc') or args.dataset.startswith('bhps')
+    if need_distances ^ bool(args.distance_filename):
+        raise ValueError('distance filename should be given for usoc and bhps datasets only')
 
     if args.dataset == 'synthetic':
         configuration = {
@@ -86,8 +94,27 @@ for seed in args.seed or [None]:
             'feature_map': kernels.l1_feature_map
         }
         data = kernels.simulate_network_data(**configuration)
+    # The data have already been loaded, nothing else to be done here
+    elif data is not None:
+        pass
     elif args.dataset == 'gss':
         data = kernels.datasets.load_general_social_survey('data/GSS2004.dta')
+    elif args.dataset == 'alp':
+        data = kernels.datasets.load_american_life_panel(
+            'data/ALP_MS86_2014_12_01_11_06_48_weighted.dta'
+        )
+    elif args.dataset.startswith('usoc_'):
+        _, code = args.dataset.split('_')
+        if code == 'c':
+            data_filename = 'ukhls_w3/c_indresp.dta'
+        elif code == 'f':
+            data_filename = 'ukhls_w6/f_indresp.dta'
+        else:
+            raise ValueError(f'invalid wave code {code}')
+        data_filename = os.path.join('data/UKDA-6614-stata/stata/stata11_se/', data_filename)
+        data = kernels.datasets.load_understanding_society_survey(
+            data_filename, code, distance_filename='workspace/uk_distance_samples-100000.txt'
+        )
     else:
         raise KeyError(args.dataset)
 
@@ -155,8 +182,11 @@ for seed in args.seed or [None]:
         scales = np.asarray(scales)
         x_observed = np.lib.recfunctions.structured_to_unstructured(x_observed)
 
+    # Log and validate the standardisation
     logging.info("feature offset: %s", dict(zip(feature_names, offsets)))
     logging.info("feature scale: %s", dict(zip(feature_names, scales)))
+    assert np.all(np.isfinite(offsets)), "offsets are not finite"
+    assert np.all(np.isfinite(scales)), "scales are not finite"
 
     # Standardise the features
     x_observed = (x_observed - offsets) / scales
@@ -165,6 +195,11 @@ for seed in args.seed or [None]:
                  dict(zip(feature_names, x_observed[~y_observed].mean(axis=0))))
     logging.info("mean standardised features for cases: %s",
                  dict(zip(feature_names, x_observed[y_observed].mean(axis=0))))
+
+    # Last sanity check to validate the inputs
+    assert np.all(np.isfinite(x_observed)), "features are not finite"
+    assert np.all(np.isfinite(y_observed)), "outcomes are not finite"
+    assert np.all(np.isfinite(weights)), "weights are not finite"
 
     log_likelihood = ft.partial(
         kernels.evaluate_case_control_log_likelihood,

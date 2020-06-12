@@ -1,3 +1,38 @@
+# Set up different targets and datasets ============================================================
+
+USOC_DATASETS = usoc_c usoc_f
+BHPS_DATASETS = bhps
+DATASETS = gss alp $(USOC_DATASETS) $(BHPS_DATASETS)
+
+USOC_TARGETS = $(addprefix workspace/,$(USOC_DATASETS))
+INFERENCE_TARGETS = $(addprefix workspace/,$(DATASETS))
+
+inference : $(INFERENCE_TARGETS)
+
+.PHONY : data tests clean docs build figures $(INFERENCE_TARGETS)
+
+SEED ?= 0:5
+LOG_LEVEL ?= info
+INFER_CMD = python scripts/infer.py --seed=$(SEED) --log-level=$(LOG_LEVEL)
+NUM_DISTANCE_SAMPLES = 100000
+
+# General Social Survey ----------------------------------------------------------------------------
+
+workspace/gss :
+	$(INFER_CMD) gss
+
+# American Life Panel Survey -----------------------------------------------------------------------
+
+workspace/alp :
+	$(INFER_CMD) alp
+
+# Understanding Society and British Household Panel Survey -----------------------------------------
+
+workspace/usoc : $(USOC_TARGETS)
+
+$(USOC_TARGETS) : workspace/% : workspace/uk_distance_samples-$(NUM_DISTANCE_SAMPLES).txt
+	$(INFER_CMD) --distance-filename=$< $*
+
 # Generate distance samples
 workspace/uk_distance_samples-$(NUM_DISTANCE_SAMPLES).txt : \
 		data/lsoa_boundaries_2011/LSOA_2011_EW_BGC_V2.shp \
@@ -74,4 +109,4 @@ data/UKDA-6614-stata/6614_file_information.rtf : data/6614stata_18FA55F5E32F54B0
 
 # Figures ==========================================================================================
 
-figures :
+figures : manuscript/segregation-embedding.pdf
