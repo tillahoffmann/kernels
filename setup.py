@@ -10,8 +10,13 @@ setup(
         'numdifftools',
         'numpy',
         'pandas',
+        'pyproj',
+        'pyshp',
+        'scikit-learn',
         'scipy',
+        'shapely',
         'tqdm',
+        'xlrd',
     ],
     extras_require={
         'tests': [
