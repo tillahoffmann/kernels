@@ -199,12 +199,12 @@ def evaluate_case_control_log_likelihood(theta, x, y, *, prevalence=None, ratio=
         return log_likelihood
 
 
-def exrange(x, factor=0.2, axis=None):
+def exrange(*xs, factor=0.2, axis=None):
     """
     Evaluate an expanded range.
     """
-    xmin = np.min(x, axis=axis)
-    xmax = np.max(x, axis=axis)
+    xmin = np.min([np.min(x, axis=axis) for x in xs], axis=0)
+    xmax = np.max([np.max(x, axis=axis) for x in xs], axis=0)
     rng = xmax - xmin
     return xmin - factor * rng, xmax + factor * rng
 
