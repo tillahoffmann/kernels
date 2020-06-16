@@ -1,4 +1,4 @@
-from kernels.datasets import util
+from kernels.datasets import dataset as util
 import numpy as np
 import pytest
 
@@ -41,7 +41,7 @@ def test_expand_mappings():
     }
 
 
-def test_recode():
+def test_recode_values():
     x = {
         'a': 1,
         'b': 2,
@@ -55,7 +55,7 @@ def test_recode():
             5: None,
         }
     }
-    assert util.recode(x, **mappings) == {
+    assert util.recode_values(x, **mappings) == {
         'a': -1,
         'b': 2,
         'c': 3,
