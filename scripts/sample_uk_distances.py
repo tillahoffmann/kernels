@@ -144,15 +144,16 @@ for _ in tqdm.tqdm(range(args.num_samples), desc='sampling'):
         # Sample a point within the polygon
         minx, miny, maxx, maxy = polygon.bounds
         point = None
-        for _ in range(100):
+        for _ in range(500):
             x = np.random.uniform(minx, maxx)
             y = np.random.uniform(miny, maxy)
-            point = geometry.Point(x, y)
-            if point.within(polygon):
-                points.append(point)
+            candidate = geometry.Point(x, y)
+            if candidate.within(polygon):
+                point = candidate
                 break
         if point is None:
             raise ValueError('could not sample for %s' % lsoa)
+        points.append(point)
 
     # Compute the distance between points
     a, b = points
