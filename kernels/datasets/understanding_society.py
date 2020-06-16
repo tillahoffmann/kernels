@@ -1,8 +1,6 @@
-import functools as ft
-import logging
 import numpy as np
 import pandas as pd
-from . import util
+from . import dataset
 
 ETHNICITY_MAP = {
     'white': (1, 2, 3, 4, 5, 6, 7),
@@ -11,44 +9,9 @@ ETHNICITY_MAP = {
     'arab': (17,),
     'other': (8, 97),
 }
-LOGGER = logging.getLogger(__name__)
 
 
-def understanding_society_feature_map(x, y, sampled_distances):
-    """
-    Evaluate features for the Understanding Society Survey.
-    """
-    # Aggregate in the same fashion as Understanding Society
-    proba, _ = np.histogram(sampled_distances, bins=[0, 1, 5, 50, 1e6])
-    proba = proba / np.sum(proba)
-    missing = np.isnan(x['distance'])
-    sampled = 1 + np.random.choice(len(proba), len(x), p=proba)
-    distance = np.where(missing, sampled, x['distance'])
-
-    # Get the ethnicities
-    keys = ['ethnicity_%s' % key for key in ETHNICITY_MAP]
-    ethnicity = 0.5 * sum(abs(x[key] - y[key]) for key in keys)
-
-    return util.to_records({
-        'bias': np.ones(x.shape[0]),
-        'sex': x['sex'] != y['sex'],
-        'age': np.abs(x['age'] - y['age']),
-        'occupation': x['occupation'] != y['occupation'],
-        'ethnicity': ethnicity,
-        'distance': distance,
-    })
-
-
-def _recode_ethnicity(x):
-    ethnicity = x.pop('ethnicity')
-    ethnicities = {key: ethnicity in value for key, value in ETHNICITY_MAP.items()}
-    norm = sum(ethnicities.values())
-    assert norm, "no ethnicity recovered from code %s" % ethnicity
-    x.update({'ethnicity_%s' % key: value / norm for key, value in ethnicities.items()})
-    return x
-
-
-def load_understanding_society_survey(filename, code, distance_filename):
+class UnderstandingSocietyDataset(dataset.Dataset):
     """
     Load the dataset from the Understanding Society Survey.
 
@@ -228,101 +191,122 @@ def load_understanding_society_survey(filename, code, distance_filename):
     | invalid as above                                 | < 0  |
     +--------------------------------------------------+------+
     """
-    raw = pd.read_stata(filename, convert_categoricals=False)
+    def __init__(self, filename, code, distance_filename):
+        # cf https://www.understandingsociety.ac.uk/documentation/mainstage/survey-timeline
+        population_sizes = {
+            'usoc_c': 63.5e6,  # https://www.google.com/search?q=2012+uk+population
+            'usoc_f': 64.85e6,  # https://www.google.com/search?q=2015+uk+population
+        }
+        super(UnderstandingSocietyDataset, self).__init__(population_sizes[code], True)
+        self.filename = filename
+        self.code = code
+        _, self.short_code = self.code.split('_')
+        self.distance_filename = distance_filename
+        self.distance_proba = None
 
-    ego_attrs = {
-        'occupation': '%s_jbstat',
-        'age': '%s_dvage',
-        'sex': '%s_sex',
-        'ethnicity': '%s_racel_dv',
-        'weight': '%s_indscub_xw',
-    }
+    def recode(self, x, ego):
+        x = {key: None if value < 0 else value for key, value in x.items()}
+        # Recode ethnicities for both alters and egos
+        ethnicity = x.pop('ethnicity')
+        if pd.isnull(ethnicity):
+            ethnicities = {key: np.nan for key in ETHNICITY_MAP}
+            norm = 1
+        else:
+            ethnicities = {key: ethnicity in value for key, value in ETHNICITY_MAP.items()}
+            norm = sum(ethnicities.values())
+            assert norm, "no ethnicity recovered from code %s" % ethnicity
+        x.update({'ethnicity_%s' % key: value / norm for key, value in ethnicities.items()})
 
-    alter_attrs = {
-        'sex': '%s_netsx_%d',
-        'age': '%s_netag_%d',
-        'distance': '%s_netlv_%d',
-        'occupation': '%s_netjb_%d',
-        'ethnicity': '%s_netet_%d',
-        'relative': '%s_netwr_%d',
-    }
-
-    common_coding = {
-        'sex': {
+        x = dataset.recode_values(x, sex={
             1: 'male',
             2: 'female',
-        }
-    }
+        })
 
-    skipped_egos = []
-    skipped_alters = []
-    z = []
-    egos = []
-    pairs = []
-
-    for _, row in raw.iterrows():
-        ego = {key: row[value % code] for key, value in ego_attrs.items()}
-        # Skip egos with zero weight
-        if ego['weight'] <= 0 or np.isnan(ego['weight']):
-            continue
-        # Skip egos with missing values or "doing something else"
-        if any(value < 0 for value in ego.values()) or ego['occupation'] == 97:
-            skipped_egos.append(ego)
-            continue
-        ego = _recode_ethnicity(ego)
-        ego = util.recode(ego, **util.expand_mappings(
-            occupation={
+        if ego:
+            x = dataset.recode_values(x, occupation={
                 (1, 2, 5, 10): 'employed',
                 (3, 8): 'unemployed',
                 (7, 9, 11): 'education',
                 6: 'family care',
                 4: 'retired',
-            }, **common_coding,
-        ))
+                97: 'something else',
+            })
+        else:
+            x = dataset.recode_values(x, occupation={
+                (1, 2): 'employed',
+                3: 'unemployed',
+                4: 'education',
+                5: 'family care',
+                6: 'retired',
+            }, relative={
+                1: True,
+                2: False,
+            })
 
-        ego_idx = len(z)
-        egos.append(ego_idx)
-        z.append(ego)
+        return x
 
-        # Iterate over the alters
-        for i in range(3):
-            alter = {key: row[value % (code, i + 1)] for key, value in alter_attrs.items()}
-            # Drop relatives
-            if alter.pop('relative') == 1:
-                continue
+    def is_invalid(self, x, ego):
+        if ego:
+            if x['occupation'] == 'something else':
+                return 'job: something else'
+        else:
+            if x['relative']:
+                return 'is relative'
+            elif x['distance'] == 5:
+                return 'outside UK'
+        return super(UnderstandingSocietyDataset, self).is_invalid(x, ego)
 
-            # Skip alters with missing values or who live outside the UK
-            if any(value < 0 for value in alter.values()) or alter['distance'] == 5:
-                skipped_alters.append(alter)
-                continue
-            alter = _recode_ethnicity(alter)
-            alter = util.recode(alter, **util.expand_mappings(
-                occupation={
-                    (1, 2): 'employed',
-                    3: 'unemployed',
-                    4: 'education',
-                    5: 'family care',
-                    6: 'retired',
-                }, **common_coding,
-            ))
+    def load(self):
+        # Load the sampled distances
+        sampled_distances = np.squeeze(np.loadtxt(self.distance_filename)) / 1609.34
+        proba, _ = np.histogram(sampled_distances, bins=[0, 1, 5, 50, 1e6])
+        self.distance_proba = proba / np.sum(proba)
 
-            alter_idx = len(z)
-            z.append(alter)
-            pairs.append((alter_idx, ego_idx))
+        # Load the main survey dataset
+        raw = pd.read_stata(self.filename, convert_categoricals=False)
 
-    n = {
-        'c': 63.5e6,  # https://www.google.com/search?q=2012+uk+population
-        'f': 64.85e6,  # https://www.google.com/search?q=2015+uk+population
-    }
+        ego_attributes = {
+            'occupation': '%s_jbstat',
+            'age': '%s_dvage',
+            'sex': '%s_sex',
+            'ethnicity': '%s_racel_dv',
+            'weight': '%s_indscub_xw',
+        }
 
-    sampled_distances = np.squeeze(np.loadtxt(distance_filename)) / 1609
+        alter_attributes = {
+            'sex': '%s_netsx_%d',
+            'age': '%s_netag_%d',
+            'distance': '%s_netlv_%d',
+            'occupation': '%s_netjb_%d',
+            'ethnicity': '%s_netet_%d',
+            'relative': '%s_netwr_%d',
+        }
 
-    return {
-        'egos': egos,
-        'pairs': pairs,
-        'z': util.to_records(z),
-        'feature_map': ft.partial(understanding_society_feature_map,
-                                  sampled_distances=sampled_distances),
-        'weights': 'weight',
-        'n': n[code],
-    }
+        for _, row in raw.iterrows():
+            with self.add_ego(self.get_attributes(row, ego_attributes, self.short_code)) as ego_idx:
+                if not ego_idx:
+                    continue
+                for i in range(3):
+                    alter = self.get_attributes(row, alter_attributes, self.short_code, i + 1)
+                    self.add_alter(alter)
+
+        return super(UnderstandingSocietyDataset, self).load()
+
+    def feature_map(self, x, y):
+        # Sample distances for controls
+        missing = np.isnan(x['distance'])
+        sampled = 1 + np.random.choice(len(self.distance_proba), len(x), p=self.distance_proba)
+        distance = np.where(missing, sampled, x['distance'])
+
+        # Use mixed-membership distance for ethnicities
+        keys = ['ethnicity_%s' % key for key in ETHNICITY_MAP]
+        ethnicity = 0.5 * sum(abs(x[key] - y[key]) for key in keys)
+
+        return dataset.to_records({
+            'bias': np.ones(x.shape[0]),
+            'sex': x['sex'] != y['sex'],
+            'age': np.abs(x['age'] - y['age']),
+            'occupation': x['occupation'] != y['occupation'],
+            'ethnicity': ethnicity,
+            'distance': distance,
+        })

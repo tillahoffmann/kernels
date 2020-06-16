@@ -4,6 +4,7 @@ import functools as ft
 import hashlib
 import kernels
 import logging
+import numdifftools as ndt
 import numpy as np
 import numpy.lib.recfunctions
 import os
@@ -37,7 +38,7 @@ parser = argparse.ArgumentParser()
 kernels.util.add_logging_argument(parser)
 parser.add_argument('dataset', choices=['alp', 'gss', 'synthetic', 'usoc_c', 'usoc_f'],
                     help='dataset to run inference on')
-parser.add_argument('--num_samples', '-n', type=int, default=10000,
+parser.add_argument('--num-samples', '-n', type=int, default=10000,
                     help='number of posterior samples')
 parser.add_argument('--filename', '-f', help='filename to store results')
 parser.add_argument('--seed', '-s', type=_parse_seed, help='random number generator seed')
@@ -98,23 +99,22 @@ for seed in args.seed or [None]:
     elif data is not None:
         pass
     elif args.dataset == 'gss':
-        data = kernels.datasets.load_general_social_survey('data/GSS2004.dta')
+        data = kernels.datasets.GeneralSocialSurveyDataset('data/GSS2004.dta').load()
     elif args.dataset == 'alp':
-        data = kernels.datasets.load_american_life_panel(
+        data = kernels.datasets.AmericanLifePanelDataset(
             'data/ALP_MS86_2014_12_01_11_06_48_weighted.dta'
-        )
+        ).load()
     elif args.dataset.startswith('usoc_'):
-        _, code = args.dataset.split('_')
-        if code == 'c':
-            data_filename = 'ukhls_w3/c_indresp.dta'
-        elif code == 'f':
-            data_filename = 'ukhls_w6/f_indresp.dta'
-        else:
-            raise ValueError(f'invalid wave code {code}')
+        data_filename = {
+            'usoc_c': 'ukhls_w3/c_indresp.dta',
+            'usoc_f': 'ukhls_w6/f_indresp.dta',
+        }.get(args.dataset)
+        if not data_filename:
+            raise ValueError(f'invalid dataset {args.dataset}')
         data_filename = os.path.join('data/UKDA-6614-stata/stata/stata11_se/', data_filename)
-        data = kernels.datasets.load_understanding_society_survey(
-            data_filename, code, distance_filename='workspace/uk_distance_samples-100000.txt'
-        )
+        data = kernels.datasets.UnderstandingSocietyDataset(
+            data_filename, args.dataset, distance_filename=args.distance_filename
+        ).load()
     else:
         raise KeyError(args.dataset)
 
@@ -143,12 +143,10 @@ for seed in args.seed or [None]:
     y_observed = np.concatenate([np.ones(len(x_cases)), np.zeros(len(x_controls))]).astype(bool)
 
     # Construct a weight vector
-    key = data.get('weights')
-    if key is None:
-        weights = None
-    else:
+    if data['weighted']:
+        logging.info('using weighted likelihood')
         # Winsorize the weights
-        ego_weights = z[key]
+        ego_weights = z['weight']
         p95 = np.nanpercentile(ego_weights, 95)
         ego_weights = np.where(ego_weights < p95, ego_weights, p95)
         # Construct weights as described in the appendix
@@ -156,6 +154,9 @@ for seed in args.seed or [None]:
         weights1 = ego_weights[j1]
         weights = np.concatenate([weights0, weights1])
         assert all(np.isfinite(weights))
+    else:
+        logging.info('using unweighted likelihood')
+        weights = None
 
     # Generate feature names for the synthetic case
     if x_controls.dtype.fields is None:
@@ -174,8 +175,10 @@ for seed in args.seed or [None]:
                 offset = 0
                 scale = 1
             else:
-                offset = np.mean(x_controls[field])
-                scale = 1 if dtype == bool else (2 * np.std(x_controls[field]))
+                control_weights = weights0 if data['weighted'] else None
+                offset = np.average(x_controls[field], weights=control_weights)
+                variance = np.average((x_controls[field] - offset) ** 2, weights=control_weights)
+                scale = 1 if dtype == bool else (2 * np.sqrt(variance))
             offsets.append(offset)
             scales.append(scale)
         offsets = np.asarray(offsets)
@@ -191,15 +194,15 @@ for seed in args.seed or [None]:
     # Standardise the features
     x_observed = (x_observed - offsets) / scales
 
-    logging.info("mean standardised features for controls: %s",
+    logging.info("mean standardised features for controls (unweighted): %s",
                  dict(zip(feature_names, x_observed[~y_observed].mean(axis=0))))
-    logging.info("mean standardised features for cases: %s",
+    logging.info("mean standardised features for cases (unweighted): %s",
                  dict(zip(feature_names, x_observed[y_observed].mean(axis=0))))
 
     # Last sanity check to validate the inputs
     assert np.all(np.isfinite(x_observed)), "features are not finite"
     assert np.all(np.isfinite(y_observed)), "outcomes are not finite"
-    assert np.all(np.isfinite(weights)), "weights are not finite"
+    assert weights is None or np.all(np.isfinite(weights)), "weights are not finite"
 
     log_likelihood = ft.partial(
         kernels.evaluate_case_control_log_likelihood,
@@ -236,7 +239,9 @@ for seed in args.seed or [None]:
     # with the numerical optimisation (see https://stackoverflow.com/a/54446479/1150961 for details)
     result = optimize.minimize(lambda x: -log_posterior(x) / len(x_observed), x0)
     assert result.success, result.message
-    cov = result.hess_inv / len(x_observed)
+    # Evaluation based on numdifftools (should be more accurate)
+    cov = -np.linalg.inv(ndt.Hessian(log_posterior)(result.x))
+    # cov = result.hess_inv / len(x_observed)  # (evaluation based on the side-effect of minimiser)
     logging.info('maximised posterior in %d function evaluations', result.nfev)
     logging.info('MAP estimate: %s', dict(zip(feature_names, result.x)))
     logging.info('approximate marginal std: %s', dict(zip(feature_names, np.sqrt(np.diag(cov)))))
@@ -273,9 +278,16 @@ for seed in args.seed or [None]:
                 'xs': xs,
                 'values': values,
             },
+            'laplace_approximation': {
+                'x': result.x,
+                'cov': cov,
+            },
             'feature_names': feature_names,
             'offsets': offsets,
             'scales': scales,
+            'x_observed': x_observed,
+            'y_observed': y_observed,
+            'prevalence': prevalence,
         }, fp)
 
     logging.info('saved output to %s', filename)

@@ -1,27 +1,9 @@
-import logging
 import numpy as np
 import pandas as pd
-from . import util
+from . import dataset
 
 
-LOGGER = logging.getLogger(__name__)
-
-
-def general_social_survey_feature_map(x, y):
-    """
-    Evaluate features for the General Social Survey.
-    """
-    return util.to_records({
-        'bias': np.ones(x.shape[0]),
-        'sex': x['sex'] != y['sex'],
-        'age': np.abs(x['age'] - y['age']),
-        'educ': np.abs(x['educ'] - y['educ']),
-        'ethnicity': x['ethnicity'] != y['ethnicity'],
-        'relig': x['relig'] != y['relig'],
-    })
-
-
-def load_general_social_survey(filename):
+class GeneralSocialSurveyDataset(dataset.Dataset):
     """
     Load the dataset from the General Social Survey 2004.
 
@@ -172,158 +154,136 @@ def load_general_social_survey(filename):
     | no answer     | 9            | no answer         | 99              |
     +---------------+--------------+-------------------+-----------------+
     """
-    raw = pd.read_stata(filename, convert_categoricals=False)
+    def __init__(self, filename):
+        n = 292.8e6  # https://www.google.com/search?q=2004+us+population
+        super(GeneralSocialSurveyDataset, self).__init__(n, True)
+        self.filename = filename
 
-    # Attributes to fetch
-    ego_attrs = [
-        'sex',
-        'age',
-        'racecen1',
-        'educ', 'degree',
-        'relig',
-        'wtss',  # sampling weights
-    ]
-    alter_attrs = {
-        'sex': 'sex%d',
-        'age': 'age%d',
-        'ethnicity': 'race%d',
-        'educ': 'educ%d',
-        'relig': 'relig%d',
-    }
-    # Generic values to recode to missing
-    nulls = {
-        'sex': [8, 9],
-        'age': [98, 99],
-        'degree': [8, 9],
-        'ethnicity': [8, 9],
-        'racecen1': [98, 99],
-    }
+    def feature_map(self, x, y):
+        return dataset.to_records({
+            'bias': np.ones(x.shape[0]),
+            'sex': x['sex'] != y['sex'],
+            'age': np.abs(x['age'] - y['age']),
+            'education': np.abs(x['education'] - y['education']),
+            'ethnicity': x['ethnicity'] != y['ethnicity'],
+            'religion': x['religion'] != y['religion'],
+        })
 
-    # Attributes of the individuals
-    z = []
-    egos = []
-    alters = []
-    pairs = []
-    egos_skipped = []
-    alters_skipped = []
-
-    for _, row in raw.iterrows():
-        # Get the attributes of the ego
-        ego = {attr: row[attr] for attr in ego_attrs}
-        ego = util.fill_values(ego, **nulls, educ=[98, 99], relig=[98, 99])
-
-        if any(map(pd.isnull, ego.values())) or not ego['wtss']:
-            egos_skipped.append(ego)
-            continue
-
-        # Remap values to ensure consistency with the alters as described in the docstring
-        ego = util.recode(ego, **util.expand_mappings(**{
-            'racecen1': {
+    def recode(self, x, ego):
+        # Common codings
+        x = dataset.recode_values(x, sex={
+            1: 'male',
+            2: 'female',
+            (8, 9): None,
+        }, religion={
+            1: 'protestant',
+            2: 'catholic',
+            3: 'jewish',
+            4: 'none',
+            5: 'other',
+        })
+        # Codings for egos
+        if ego:
+            x = dataset.recode_values(x, religion={
+                (6, 7, 8, 9, 10, 11, 12, 13): 'other',
+                (98, 99): None,
+            }, ethnicity={
                 (4, 5, 6, 7, 8, 9, 10): 'asian',
                 2: 'black',
                 16: 'hispanic',
                 1: 'white',
                 (3, 11, 12, 13, 14, 15): 'other',
-            },
-            'relig': {
-                # Protestant, Catholic, Jewish, and None are consistently coded
-                1: 'protestant',
-                2: 'catholic',
-                3: 'jewish',
-                4: 'none',
-                (5, 6, 7, 8, 9, 10, 11, 12, 13): 'other',  # Other
-            },
-            'sex': {
-                1: 'male',
-                2: 'female',
-            }
-        }))
-        ego['ethnicity'] = ego.pop('racecen1')
+            }, education={
+                (98, 99): None,
+            })
 
-        # The education mapping is a bit fiddly
-        years = ego.pop('educ')
-        degree = ego.pop('degree')
+            # The education mapping is a bit fiddly
+            years = x.pop('education')
+            degree = x.pop('degree')
+            educ = None
+            if degree == 0:
+                if years <= 6:
+                    educ = 0
+                elif years <= 9:
+                    educ = 1
+                elif years <= 12:
+                    educ = 2
+            elif degree == 1:
+                if years <= 12:
+                    educ = 3  # High school degree
+                else:
+                    educ = 4  # Some college
 
-        if degree == 0:
-            if years <= 6:
-                educ = 0
-            elif years <= 9:
-                educ = 1
-            elif years <= 12:
-                educ = 2
-        elif degree == 1:
-            if years <= 12:
-                educ = 3  # High school degree
-            else:
-                educ = 4  # Some college
-        ego['educ'] = {
-            2: 5,  # Associate
-            3: 6,  # Bachelor
-            4: 7,  # Graduate
-        }.get(degree, educ)
-
-        # Add the ego
-        ego_idx = len(z)
-        z.append(ego)
-        egos.append(ego_idx)
-
-        # Get the number of alters and iterate (up to five)
-        num = row['numgiven']
-        num = 0 if pd.isnull(num) else int(num)
-        for i in range(1, 1 + min(num, 5)):
-            # Get the attributes of the alter
-            alter = {key: row[value % i] for key, value in alter_attrs.items()}
-            alter = util.fill_values(alter, **nulls, educ=[8, 9, -1], relig=[8, 9])
-            # Skip straight away if all values are missing
-            if all(map(pd.isnull, alter.values())):
-                continue
-            # Record alters with missing information if some data are present
-            if any(map(pd.isnull, alter.values())):
-                alters_skipped.append(alter)
-                continue
-
-            # Check the relationship type and constrain to friend
-            keys = ['spouse', 'parent', 'sibling', 'child', 'othfam', 'cowork', 'memgrp',
-                    'neighbr', 'friend', 'advisor', 'other']
-            types = {key: row['%s%d' % (key, i)] == 1 for key in keys}
-
-            family = ['spouse', 'parent', 'sibling', 'child', 'othfam']
-            if any(types[key] for key in family) or not types['friend']:
-                continue
-
-            alter = util.recode(alter, relig={
-                1: 'protestant',
-                2: 'catholic',
-                3: 'jewish',
-                4: 'none',
-                5: 'other',
-            }, ethnicity={
+            x['education'] = {
+                2: 5,  # Associate
+                3: 6,  # Bachelor
+                4: 7,  # Graduate
+            }.get(degree, educ)
+        # Codings for alters
+        else:
+            x = dataset.recode_values(x, ethnicity={
                 1: 'asian',
                 2: 'black',
                 3: 'hispanic',
                 4: 'white',
                 5: 'other',
-            }, sex={
-                1: 'male',
-                2: 'female',
+            }, education={
+                (8, 9, -1): None,
+            }, religion={
+                (8, 9): None,
             })
+            # Parse the relationships
+            for key in x:
+                if key.startswith('relationship_'):
+                    x[key] = x[key] == 1
+        return x
 
-            alter_idx = len(z)
-            z.append(alter)
-            pairs.append((alter_idx, ego_idx))
-            alters.append(alter_idx)
+    def load(self):
+        raw = pd.read_stata(self.filename, convert_categoricals=False)
+        ego_attributes = {
+            'sex': 'sex',
+            'age': 'age',
+            'ethnicity': 'racecen1',
+            'education': 'educ',
+            'degree': 'degree',
+            'religion': 'relig',
+            'weight': 'wtss'
+        }
+        alter_attributes = {
+            'sex': 'sex%d',
+            'age': 'age%d',
+            'ethnicity': 'race%d',
+            'education': 'educ%d',
+            'religion': 'relig%d',
+            'relationship_spouse': 'spouse%d',
+            'relationship_parent': 'parent%d',
+            'relationship_sibling': 'sibling%d',
+            'relationship_child': 'child%d',
+            'relationship_othfam': 'othfam%d',
+            'relationship_cowork': 'cowork%d',
+            'relationship_memgrp': 'memgrp%d',
+            'relationship_neighbr': 'neighbr%d',
+            'relationship_friend': 'friend%d',
+            'relationship_advisor': 'advisor%d',
+            'relationship_other': 'other%d'
+        }
 
-    # TODO: recode values into something interpretable, like "male" instead of `1`
+        for _, row in raw.iterrows():
+            with self.add_ego(self.get_attributes(row, ego_attributes)) as ego_idx:
+                if ego_idx is None:
+                    continue
+                # Iterate over the alters
+                for i in range(5):
+                    self.add_alter(self.get_attributes(row, alter_attributes, i + 1))
 
-    # TODO transfer one level up
-    LOGGER.info('skipped %d egos', len(egos_skipped))
-    LOGGER.info('skipped %d alters', len(alters_skipped))
+        return super(GeneralSocialSurveyDataset, self).load()
 
-    return {
-        'z': util.to_records(z),
-        'egos': egos,
-        'pairs': pairs,
-        'weights': 'wtss',
-        'n': 292.8e6,  # https://www.google.com/search?q=2004+us+population
-        'feature_map': general_social_survey_feature_map,
-    }
+    def is_invalid(self, x, ego):
+        if not ego:
+            relatives = ['spouse', 'parent', 'sibling', 'child', 'othfam']
+            if any(x['relationship_%s' % key] for key in relatives):
+                return 'relative'
+            friend = x['relationship_friend']
+            if not pd.isnull(friend) and not friend:
+                return 'not a friend'
+        return super(GeneralSocialSurveyDataset, self).is_invalid(x, ego)

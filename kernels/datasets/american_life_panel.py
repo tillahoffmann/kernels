@@ -1,29 +1,9 @@
 import numpy as np
 import pandas as pd
-from . import util
+from . import dataset
 
 
-def american_life_panel_feature_map(x, y):
-    return util.to_records({
-        'bias': np.ones(x.shape[0]),
-        'sex': x['sex'] != y['sex'],
-        'age': np.abs(x['age'] - y['age']),
-        'ethnicity': x['ethnicity'] != y['ethnicity'],
-        'state': x['state'] != y['state'],
-        'education': np.abs(x['education'] - y['education']),
-    })
-
-
-def _parse_values(x):
-    y = {}
-    for key, value in x.items():
-        if isinstance(value, str) and key != 'identifier':
-            value = int(value.split()[0])
-        y[key] = value
-    return y
-
-
-def load_american_life_panel(filename):
+class AmericanLifePanelDataset(dataset.Dataset):
     """
     Load the dataset from the American Life Panel survey.
 
@@ -174,29 +154,19 @@ def load_american_life_panel(filename):
     | Other friend                                               | 9    |
     +------------------------------------------------------------+------+
     """
-    raw = pd.read_stata(filename)
+    def __init__(self, filename):
+        n = 306.8e6  # from https://www.google.com/search?q=2009+us+population
+        super(AmericanLifePanelDataset, self).__init__(n, True)
+        self.filename = filename
 
-    ego_attrs = {
-        'sex': 'gender',
-        'age': 'calcage',
-        'state': 'statereside',
-        'education': 'highesteducation',
-        'ethnicity': 'ethnicity',
-        'hispanic': 'hispaniclatino',
-        'identifier': 'prim_key',
-        'weight': 'weight',
-    }
-    alter_attrs = {
-        'sex': 'sex_%d_',
-        'age': 'dm_age_%d_',
-        'state': 'state_%d_',
-        'education': 'edu_%d_',
-        'ethnicity': 'race_%d_',
-        'hispanic': 'hisp_%d_',
-        'relationship': 'relation_%d_',
-    }
-    common_codings = {
-        'state': {
+    def recode(self, x, ego):
+        y = {}
+        for key, value in x.items():
+            if isinstance(value, str) and key != 'identifier':
+                value = int(value.split()[0])
+            y[key] = value
+
+        y = dataset.recode_values(y, state={
             1:  'ALASKA',
             2:  'ALABAMA',
             3:  'ARIZONA',
@@ -249,113 +219,113 @@ def load_american_life_panel(filename):
             50: 'WYOMING',
             51: 'WASHINGTON D.C.',
             52: 'PUERTO RICO',
-        },
-        'sex': {
+        }, sex={
             1: 'male',
             2: 'female',
-        },
-        'ethnicity': {
+        }, ethnicity={
             1: 'white',
             2: 'black',
             3: 'native',
             4: 'asian',
             5: 'other',
-        },
-        'hispanic': {
+        }, hispanic={
             1: True,
             2: False,
-        },
-    }
+        },)
 
-    z = []
-    egos = []
-    pairs = []
-    skipped_egos = []
-    skipped_alters = []
+        if ego:
+            # Map the age to the same categorical variables
+            age = y.pop('age')
+            if age < 21:
+                age = 1
+            elif age < 36:
+                age = 2
+            elif age < 51:
+                age = 3
+            elif age < 66:
+                age = 4
+            elif age < 81:
+                age = 5
+            else:
+                age = 6
+            y['age'] = age
 
-    for _, row in raw.iterrows():
-        ego = _parse_values({key: row[value] for key, value in ego_attrs.items()})
-
-        # Skip straight away if all values are missing
-        if all(map(pd.isnull, ego.values())):
-            continue
-        if any(map(pd.isnull, ego.values())):
-            skipped_egos.append(ego)
-            continue
-
-        # Map the age to the same categorical variables
-        age = ego.pop('age')
-        if age < 21:
-            age = 1
-        elif age < 36:
-            age = 2
-        elif age < 51:
-            age = 3
-        elif age < 66:
-            age = 4
-        elif age < 81:
-            age = 5
+            y = dataset.recode_values(y, education={
+                (1, 2, 3, 4): 1,
+                (5, 6, 7, 8): 2,
+                9: 3,
+                10: 4,
+                (11, 12): 5,
+                13: 6,
+                14: 7,
+                (15, 16): 8,
+            })
         else:
-            age = 6
-        ego['age'] = 15 * age
-
-        # Recode the ego
-        ego = util.recode(ego, **util.expand_mappings(**common_codings, education={
-            (1, 2, 3, 4): 1,
-            (5, 6, 7, 8): 2,
-            9: 3,
-            10: 4,
-            (11, 12): 5,
-            13: 6,
-            14: 7,
-            (15, 16): 8,
-        }))
-        if ego['hispanic']:
-            ego['ethnicity'] = 'hispanic'
-
-        ego_idx = len(z)
-        egos.append(ego_idx)
-        z.append(ego)
-
-        for i in range(1, 6):
-            alter = _parse_values({key: row[value % i] for key, value in alter_attrs.items()})
-            # Skip because of wrong relationship type
-            if alter['relationship'] < 4:
-                continue
-
-            # Skip because of missing data
-            if all(map(pd.isnull, alter.values())):
-                continue
-            if any(map(pd.isnull, alter.values())):
-                skipped_alters.append(alter)
-                continue
-
-            # Recode the alter
-            alter['identifier'] = f'{ego["identifier"]}/{i}'
-            alter = util.recode(alter, **util.expand_mappings(**common_codings, relationship={
+            y = dataset.recode_values(y, relationship={
+                1: 'partner',
+                2: 'child',
+                3: 'parent',
                 4: 'work/school mate',
                 5: 'neighbour',
                 6: 'online friend',
                 7: 'friend from organisation',
                 8: 'professional',
                 9: 'other',
-            }))
-            if alter['hispanic']:
-                alter['ethnicity'] = 'hispanic'
+            })
 
-            # Rescale the age (the absolute value doesn't matter because we use L1 features)
-            alter['age'] = 15 * alter['age']
+        # Convert to a year-scale (the offset doesn't matter because we consider L1 features)
+        y['age'] = 15 * y['age']
+        hispanic = y.pop('hispanic')
+        if hispanic is True:  # need to guard for np.nan being truth-y
+            y['ethnicity'] = 'hispanic'
 
-            # Add edge and attributes
-            alter_idx = len(z)
-            pairs.append((alter_idx, ego_idx))
-            z.append(alter)
+        return y
 
-    return {
-        'z': util.to_records(z),
-        'egos': egos,
-        'pairs': pairs,
-        'n': 306.8e6,  # from https://www.google.com/search?q=2009+us+population
-        'feature_map': american_life_panel_feature_map,
-        'weights': 'weight',
-    }
+    def feature_map(self, x, y):
+        return dataset.to_records({
+            'bias': np.ones(x.shape[0]),
+            'sex': x['sex'] != y['sex'],
+            'age': np.abs(x['age'] - y['age']),
+            'ethnicity': x['ethnicity'] != y['ethnicity'],
+            'state': x['state'] != y['state'],
+            'education': np.abs(x['education'] - y['education']),
+        })
+
+    def load(self):
+        raw = pd.read_stata(self.filename)
+
+        ego_attributes = {
+            'sex': 'gender',
+            'age': 'calcage',
+            'state': 'statereside',
+            'education': 'highesteducation',
+            'ethnicity': 'ethnicity',
+            'hispanic': 'hispaniclatino',
+            'identifier': 'prim_key',
+            'weight': 'weight',
+        }
+        alter_attributes = {
+            'sex': 'sex_%d_',
+            'age': 'dm_age_%d_',
+            'state': 'state_%d_',
+            'education': 'edu_%d_',
+            'ethnicity': 'race_%d_',
+            'hispanic': 'hisp_%d_',
+            'relationship': 'relation_%d_',
+        }
+
+        for _, row in raw.iterrows():
+            with self.add_ego(self.get_attributes(row, ego_attributes)) as ego_idx:
+                if not ego_idx:
+                    continue
+
+                for i in range(5):
+                    self.add_alter(self.get_attributes(row, alter_attributes, i + 1))
+
+        return super(AmericanLifePanelDataset, self).load()
+
+    def is_invalid(self, x, ego):
+        if not ego:
+            if x['relationship'] in ('partner', 'child', 'parent'):
+                return 'relative: %s' % x['relationship']
+        return super(AmericanLifePanelDataset, self).is_invalid(x, ego)
