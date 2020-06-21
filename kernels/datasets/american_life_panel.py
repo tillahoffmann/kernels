@@ -287,7 +287,7 @@ class AmericanLifePanelDataset(dataset.Dataset):
             'sex': x['sex'] != y['sex'],
             'age': np.abs(x['age'] - y['age']),
             'ethnicity': x['ethnicity'] != y['ethnicity'],
-            'state': x['state'] != y['state'],
+            'distance': x['state'] != y['state'],
             'education': np.abs(x['education'] - y['education']),
         })
 
