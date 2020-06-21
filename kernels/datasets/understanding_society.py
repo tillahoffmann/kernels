@@ -196,6 +196,15 @@ class UnderstandingSocietyDataset(dataset.Dataset):
         population_sizes = {
             'usoc_c': 63.5e6,  # https://www.google.com/search?q=2012+uk+population
             'usoc_f': 64.85e6,  # https://www.google.com/search?q=2015+uk+population
+            'usoc_bb': 57.51e6,  # https://www.google.com/search?q=1992+uk+population
+            'usoc_bd': 57.79e6,  # https://www.google.com/search?q=1994+uk+population
+            'usoc_bf': 58.09e6,  # https://www.google.com/search?q=1996+uk+population
+            'usoc_bh': 58.39e6,  # https://www.google.com/search?q=1998+uk+population
+            'usoc_bj': 58.79e6,  # https://www.google.com/search?q=2000+uk+population
+            'usoc_bl': 59.24e6,  # https://www.google.com/search?q=2002+uk+population
+            'usoc_bn': 59.79e6,  # https://www.google.com/search?q=2004+uk+population
+            'usoc_bp': 60.62e6,  # https://www.google.com/search?q=2006+uk+population
+            'usoc_br': 61.57e6,  # https://www.google.com/search?q=2008+uk+population
         }
         super(UnderstandingSocietyDataset, self).__init__(population_sizes[code], True)
         self.filename = filename
@@ -203,19 +212,22 @@ class UnderstandingSocietyDataset(dataset.Dataset):
         _, self.short_code = self.code.split('_')
         self.distance_filename = distance_filename
         self.distance_proba = None
+        # Whether we're in the bhps waves or not
+        self.is_usoc = len(self.short_code) == 1
 
     def recode(self, x, ego):
         x = {key: None if value < 0 else value for key, value in x.items()}
         # Recode ethnicities for both alters and egos
-        ethnicity = x.pop('ethnicity')
-        if pd.isnull(ethnicity):
-            ethnicities = {key: np.nan for key in ETHNICITY_MAP}
-            norm = 1
-        else:
-            ethnicities = {key: ethnicity in value for key, value in ETHNICITY_MAP.items()}
-            norm = sum(ethnicities.values())
-            assert norm, "no ethnicity recovered from code %s" % ethnicity
-        x.update({'ethnicity_%s' % key: value / norm for key, value in ethnicities.items()})
+        if self.is_usoc:
+            ethnicity = x.pop('ethnicity')
+            if pd.isnull(ethnicity):
+                ethnicities = {key: np.nan for key in ETHNICITY_MAP}
+                norm = 1
+            else:
+                ethnicities = {key: ethnicity in value for key, value in ETHNICITY_MAP.items()}
+                norm = sum(ethnicities.values())
+                assert norm, "no ethnicity recovered from code %s" % ethnicity
+            x.update({'ethnicity_%s' % key: value / norm for key, value in ethnicities.items()})
 
         x = dataset.recode_values(x, sex={
             1: 'male',
@@ -267,20 +279,34 @@ class UnderstandingSocietyDataset(dataset.Dataset):
 
         ego_attributes = {
             'occupation': '%s_jbstat',
-            'age': '%s_dvage',
+            'age': '%s_age_dv',
             'sex': '%s_sex',
-            'ethnicity': '%s_racel_dv',
-            'weight': '%s_indscub_xw',
         }
 
-        alter_attributes = {
-            'sex': '%s_netsx_%d',
-            'age': '%s_netag_%d',
-            'distance': '%s_netlv_%d',
-            'occupation': '%s_netjb_%d',
-            'ethnicity': '%s_netet_%d',
-            'relative': '%s_netwr_%d',
-        }
+        if self.is_usoc:
+            ego_attributes.update({
+                'ethnicity': '%s_racel_dv',
+                'weight': '%s_indscub_xw',
+            })
+            alter_attributes = {
+                'sex': '%s_netsx_%d',
+                'age': '%s_netag_%d',
+                'distance': '%s_netlv_%d',
+                'occupation': '%s_netjb_%d',
+                'relative': '%s_netwr_%d',
+                'ethnicity': '%s_netet_%d',
+            }
+        else:
+            ego_attributes.update({
+                'weight': '%s_xrwght',
+            })
+            alter_attributes = {
+                'sex': '%s_netsx%d',
+                'age': '%s_net%dag',
+                'distance': '%s_net%dlv',
+                'occupation': '%s_net%djb',
+                'relative': '%s_net%dwr',
+            }
 
         for _, row in raw.iterrows():
             with self.add_ego(self.get_attributes(row, ego_attributes, self.short_code)) as ego_idx:
@@ -298,15 +324,17 @@ class UnderstandingSocietyDataset(dataset.Dataset):
         sampled = 1 + np.random.choice(len(self.distance_proba), len(x), p=self.distance_proba)
         distance = np.where(missing, sampled, x['distance'])
 
-        # Use mixed-membership distance for ethnicities
-        keys = ['ethnicity_%s' % key for key in ETHNICITY_MAP]
-        ethnicity = 0.5 * sum(abs(x[key] - y[key]) for key in keys)
-
-        return dataset.to_records({
+        features = {
             'bias': np.ones(x.shape[0]),
             'sex': x['sex'] != y['sex'],
             'age': np.abs(x['age'] - y['age']),
             'occupation': x['occupation'] != y['occupation'],
-            'ethnicity': ethnicity,
             'distance': distance,
-        })
+        }
+
+        # Use mixed-membership distance for ethnicities
+        if self.is_usoc:
+            keys = ['ethnicity_%s' % key for key in ETHNICITY_MAP]
+            features['ethnicity'] = 0.5 * sum(abs(x[key] - y[key]) for key in keys)
+
+        return dataset.to_records(features)
