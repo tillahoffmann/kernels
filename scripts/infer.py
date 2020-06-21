@@ -36,8 +36,10 @@ def _parse_seed(value):
 
 parser = argparse.ArgumentParser()
 kernels.util.add_logging_argument(parser)
-parser.add_argument('dataset', choices=['alp', 'gss', 'synthetic', 'usoc_c', 'usoc_f'],
-                    help='dataset to run inference on')
+parser.add_argument('dataset', help='dataset to run inference on', choices=[
+    'alp', 'gss', 'synthetic', 'usoc_c', 'usoc_f', 'usoc_bb', 'usoc_bd', 'usoc_bf', 'usoc_bh',
+    'usoc_bj', 'usoc_bl', 'usoc_bn', 'usoc_bp', 'usoc_br'
+])
 parser.add_argument('--num-samples', '-n', type=int, default=10000,
                     help='number of posterior samples')
 parser.add_argument('--filename', '-f', help='filename to store results')
@@ -108,6 +110,16 @@ for seed in args.seed or [None]:
         data_filename = {
             'usoc_c': 'ukhls_w3/c_indresp.dta',
             'usoc_f': 'ukhls_w6/f_indresp.dta',
+            # British Household Panel Survey
+            'usoc_bb': 'bhps_w2/bb_indresp.dta',
+            'usoc_bd': 'bhps_w4/bd_indresp.dta',
+            'usoc_bf': 'bhps_w6/bf_indresp.dta',
+            'usoc_bh': 'bhps_w8/bh_indresp.dta',
+            'usoc_bj': 'bhps_w10/bj_indresp.dta',
+            'usoc_bl': 'bhps_w12/bl_indresp.dta',
+            'usoc_bn': 'bhps_w14/bn_indresp.dta',
+            'usoc_bp': 'bhps_w16/bp_indresp.dta',
+            'usoc_br': 'bhps_w18/br_indresp.dta',
         }.get(args.dataset)
         if not data_filename:
             raise ValueError(f'invalid dataset {args.dataset}')
@@ -152,7 +164,7 @@ for seed in args.seed or [None]:
         # Construct weights as described in the appendix
         weights0 = ego_weights[i0] * ego_weights[j0]
         weights1 = ego_weights[j1]
-        weights = np.concatenate([weights0, weights1])
+        weights = np.concatenate([weights1, weights0])
         assert all(np.isfinite(weights))
     else:
         logging.info('using unweighted likelihood')
@@ -288,6 +300,7 @@ for seed in args.seed or [None]:
             'x_observed': x_observed,
             'y_observed': y_observed,
             'prevalence': prevalence,
+            'weights': weights,
         }, fp)
 
     logging.info('saved output to %s', filename)
