@@ -1,6 +1,6 @@
 # Set up different targets and datasets ============================================================
 
-USOC_DATASETS = usoc_c usoc_f
+USOC_DATASETS = usoc_c usoc_f usoc_bb usoc_bd usoc_bf usoc_bh usoc_bj usoc_bl usoc_bn usoc_bp usoc_br
 BHPS_DATASETS = bhps
 DATASETS = gss alp $(USOC_DATASETS) $(BHPS_DATASETS)
 
