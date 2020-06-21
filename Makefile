@@ -11,7 +11,7 @@ inference : $(INFERENCE_TARGETS)
 
 .PHONY : data tests clean docs build figures $(INFERENCE_TARGETS)
 
-SEED ?= 0:5
+SEED ?= 0:3
 LOG_LEVEL ?= info
 INFER_CMD = python scripts/infer.py --seed=$(SEED) --log-level=$(LOG_LEVEL)
 NUM_DISTANCE_SAMPLES = 1000000
