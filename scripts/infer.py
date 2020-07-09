@@ -19,6 +19,9 @@ RANGE_PATTERN = re.compile(r'(\d+):(\d+)')
 
 
 def _parse_seed(value):
+    """
+    Parse the random number generator seeds.
+    """
     values = []
     parts = value.split(',')
     for part in parts:
@@ -38,7 +41,7 @@ parser = argparse.ArgumentParser()
 kernels.util.add_logging_argument(parser)
 parser.add_argument('dataset', help='dataset to run inference on', choices=[
     'alp', 'gss', 'synthetic', 'usoc_c', 'usoc_f', 'usoc_bb', 'usoc_bd', 'usoc_bf', 'usoc_bh',
-    'usoc_bj', 'usoc_bl', 'usoc_bn', 'usoc_bp', 'usoc_br'
+    'usoc_bj', 'usoc_bl', 'usoc_bn', 'usoc_bp', 'usoc_br', 'rn_uk1',
 ])
 parser.add_argument('--num-samples', '-n', type=int, default=10000,
                     help='number of posterior samples')
@@ -94,9 +97,11 @@ for seed in args.seed or [None]:
             'linkln': kernels.expitln,
             's': 100,
             'seed': seed,
-            'feature_map': kernels.l1_feature_map
+            'feature_map': kernels.l1_feature_map,
+            'weighted': False,
         }
         data = kernels.simulate_network_data(**configuration)
+        logging.info('simulated parameters: %s', data['theta'])
     # The data have already been loaded, nothing else to be done here
     elif data is not None:
         pass
@@ -127,6 +132,8 @@ for seed in args.seed or [None]:
         data = kernels.datasets.UnderstandingSocietyDataset(
             data_filename, args.dataset, distance_filename=args.distance_filename
         ).load()
+    elif args.dataset == 'rn_uk1':
+        data = kernels.datasets.ResearchNowDataset('data/research_now_uk1_cleaned.csv').load()
     else:
         raise KeyError(args.dataset)
 
@@ -147,7 +154,15 @@ for seed in args.seed or [None]:
     x_cases = data['feature_map'](z[i1], z[j1])
 
     # Sample controls and get their features
-    i0, j0 = kernels.sample_controls(np.asarray(data['egos']), 3 * len(data['pairs']))
+    num_egos = len(data['egos'])
+    num_pairs = len(data['pairs'])
+    possible_controls = num_egos * (num_egos - 1) // 2
+    if possible_controls < 3 * num_pairs:
+        logging.warning('not enough egos to sample desired number of controls')
+        num_controls = possible_controls
+    else:
+        num_controls = 3 * num_pairs
+    i0, j0 = kernels.sample_controls(np.asarray(data['egos']), num_controls)
     x_controls = data['feature_map'](z[i0], z[j0])
 
     # Concatenate features and construct indicator variables
@@ -253,7 +268,6 @@ for seed in args.seed or [None]:
     assert result.success, result.message
     # Evaluation based on numdifftools (should be more accurate)
     cov = -np.linalg.inv(ndt.Hessian(log_posterior)(result.x))
-    # cov = result.hess_inv / len(x_observed)  # (evaluation based on the side-effect of minimiser)
     logging.info('maximised posterior in %d function evaluations', result.nfev)
     logging.info('MAP estimate: %s', dict(zip(feature_names, result.x)))
     logging.info('approximate marginal std: %s', dict(zip(feature_names, np.sqrt(np.diag(cov)))))
@@ -273,10 +287,10 @@ for seed in args.seed or [None]:
         logging.info('true values: %s', dict(zip(feature_names, data['theta'])))
         residuals = np.mean(xs, axis=0) - data['theta']
         logging.info('z-scores: %s', dict(zip(feature_names, residuals / np.std(xs, axis=0))))
-        cov = np.cov(xs.T)
-        chi2 = residuals.dot(np.linalg.inv(cov)).dot(residuals)
-        pval = 1 - stats.chi2(len(cov)).cdf(chi2)
-        logging.info('chi2 for %d dof: %f; p-val: %f', len(cov), chi2, pval)
+        cov_ = np.cov(xs.T)
+        chi2 = residuals.dot(np.linalg.inv(cov_)).dot(residuals)
+        pval = 1 - stats.chi2(len(cov_)).cdf(chi2)
+        logging.info('chi2 for %d dof: %f; p-val: %f', len(cov_), chi2, pval)
 
     # Package the data and results and save them ---------------------------------------------------
     os.makedirs(os.path.dirname(filename), exist_ok=True)
