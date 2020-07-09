@@ -6,9 +6,11 @@ Society Survey.
 from .american_life_panel import AmericanLifePanelDataset  # noqa
 from .general_social_survey import GeneralSocialSurveyDataset  # noqa
 from .understanding_society import UnderstandingSocietyDataset  # noqa
+from .research_now import ResearchNowDataset  # noqa
 
 __all__ = [
     'AmericanLifePanelDataset',
     'GeneralSocialSurveyDataset',
     'UnderstandingSocietyDataset',
+    'ResearchNowDataset',
 ]
