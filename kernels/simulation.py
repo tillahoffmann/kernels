@@ -67,6 +67,7 @@ def simulate_network_data(*, n, bias, link, s, seed, feature_map, theta_scale=1,
             'pairs': pairs,
             'egos': egos,
             'alters': alters,
+            'probas': probas,
             **get_args(),
         }
 
