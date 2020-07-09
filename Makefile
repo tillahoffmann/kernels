@@ -1,8 +1,7 @@
 # Set up different targets and datasets ============================================================
 
 USOC_DATASETS = usoc_c usoc_f usoc_bb usoc_bd usoc_bf usoc_bh usoc_bj usoc_bl usoc_bn usoc_bp usoc_br
-BHPS_DATASETS = bhps
-DATASETS = gss alp $(USOC_DATASETS) $(BHPS_DATASETS)
+DATASETS = gss alp synthetic $(USOC_DATASETS)
 
 USOC_TARGETS = $(addprefix workspace/,$(USOC_DATASETS))
 INFERENCE_TARGETS = $(addprefix workspace/,$(DATASETS))
@@ -11,20 +10,15 @@ inference : $(INFERENCE_TARGETS)
 
 .PHONY : data tests clean docs build figures $(INFERENCE_TARGETS)
 
-SEED ?= 0:3
+SEED ?= 0
 LOG_LEVEL ?= info
 INFER_CMD = python scripts/infer.py --seed=$(SEED) --log-level=$(LOG_LEVEL)
 NUM_DISTANCE_SAMPLES = 1000000
 
-# General Social Survey ----------------------------------------------------------------------------
+# General Social Survey/American Life Panel/Research Now -------------------------------------------
 
-workspace/gss :
-	$(INFER_CMD) gss
-
-# American Life Panel Survey -----------------------------------------------------------------------
-
-workspace/alp :
-	$(INFER_CMD) alp
+workspace/gss workspace/alp workspace/rn_uk1 : workspace/% :
+	$(INFER_CMD) $*
 
 # Understanding Society and British Household Panel Survey -----------------------------------------
 
@@ -42,6 +36,23 @@ workspace/uk_distance_samples-$(NUM_DISTANCE_SAMPLES).txt : \
 		data/lsoa_population_2012/2012-sape-t2a-corrected.xlsx \
 		data/lsoa_population_2012/SAPE_SOA_0114.xls
 	python scripts/sample_uk_distances.py --log-level=$(LOG_LEVEL) $(NUM_DISTANCE_SAMPLES)
+
+# Simulations --------------------------------------------------------------------------------------
+workspace/synthetic :
+	python scripts/infer.py --log-level=$(LOG_LEVEL) --seed=0:250 --num-samples=2 synthetic
+
+# Attribute-feature plots
+PICKLE_FILES = $(filter-out workspace/synthetic/%,$(wildcard workspace/**/*.pkl))
+AF_FILES = $(PICKLE_FILES:pkl=html)
+
+debug :
+	echo $(PICKLE_FILES)
+
+af-plots : $(AF_FILES)
+
+$(AF_FILES) : workspace/%.html : workspace/%.pkl scripts/attribute-feature-plots.ipynb
+	filename=../$< jupyter nbconvert --execute --ExecutePreprocessor.timeout=-1 \
+		--output-dir=. --output=$@ scripts/attribute-feature-plots.ipynb
 
 
 # Code stuff =======================================================================================
@@ -63,8 +74,14 @@ tests : requirements.txt
 flake8 : requirements.txt
 	flake8
 
-clean :
+clean_all :
 	rm -Rf htmlcov .pytest_cache workspace docs/_build
+
+clean_pkl :
+	rm $(PICKLE_FILES)
+
+clean_html :
+	rm -f $(AF_FILES)
 
 # Data =============================================================================================
 data : data/gss data/bhps-us data/alp
@@ -109,4 +126,11 @@ data/UKDA-6614-stata/6614_file_information.rtf : data/6614stata_18FA55F5E32F54B0
 
 # Figures ==========================================================================================
 
-figures : manuscript/segregation-embedding.pdf
+FIGURES = manuscript/embedding.pdf manuscript/credible-coverage.pdf \
+	manuscript/coefficients-age-equivalent.pdf manuscript/segregation.pdf
+
+figures : $(FIGURES)
+
+$(FIGURES) : scripts/figures.ipynb workspace/gss workspace/usoc workspace/alp
+	jupyter nbconvert --execute --ExecutePreprocessor.timeout=-1 \
+		--output-dir=. --output=workspace/figures.html $<
