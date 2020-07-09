@@ -112,7 +112,7 @@ class Dataset:
         ego = self.recode(ego, True)
 
         # Skip straight away if the ego doesn't have a weight
-        weight = ego.get('weight')
+        weight = ego.get('weight', 1)
         if pd.isnull(weight) or weight <= 0:
             is_invalid = 'zero weight'
         else:
