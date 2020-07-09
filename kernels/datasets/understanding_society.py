@@ -54,7 +54,7 @@ class UnderstandingSocietyDataset(dataset.Dataset):
     +---------------+--------------+------------------+-----------------+
 
     ``age`` is coded as a numerical value for `respondents <https://www.understandingsociety.ac.uk/
-    documentation/mainstage/dataset-documentation/wave/3/datafile/c_indresp/variable/c_dvage>`__ and
+    documentation/mainstage/dataset-documentation/variable/age_dv>`__ and
     `nominees <https://www.understandingsociety.ac.uk/documentation/mainstage/dataset-documentation/
     wave/3/datafile/c_indresp/variable/c_netag_1>`__.
 
@@ -229,6 +229,7 @@ class UnderstandingSocietyDataset(dataset.Dataset):
                 assert norm, "no ethnicity recovered from code %s" % ethnicity
             x.update({'ethnicity_%s' % key: value / norm for key, value in ethnicities.items()})
 
+        # TODO: check invalid age codes
         x = dataset.recode_values(x, sex={
             1: 'male',
             2: 'female',
@@ -250,7 +251,7 @@ class UnderstandingSocietyDataset(dataset.Dataset):
                 4: 'education',
                 5: 'family care',
                 6: 'retired',
-            }, relative={
+            }, _relative={
                 1: True,
                 2: False,
             })
@@ -262,9 +263,9 @@ class UnderstandingSocietyDataset(dataset.Dataset):
             if x['occupation'] == 'something else':
                 return 'job: something else'
         else:
-            if x['relative']:
+            if x['_relative']:
                 return 'is relative'
-            elif x['distance'] == 5:
+            elif x.get('distance') == 5:
                 return 'outside UK'
         return super(UnderstandingSocietyDataset, self).is_invalid(x, ego)
 
@@ -293,7 +294,7 @@ class UnderstandingSocietyDataset(dataset.Dataset):
                 'age': '%s_netag_%d',
                 'distance': '%s_netlv_%d',
                 'occupation': '%s_netjb_%d',
-                'relative': '%s_netwr_%d',
+                '_relative': '%s_netwr_%d',
                 'ethnicity': '%s_netet_%d',
             }
         else:
@@ -305,32 +306,41 @@ class UnderstandingSocietyDataset(dataset.Dataset):
                 'age': '%s_net%dag',
                 'distance': '%s_net%dlv',
                 'occupation': '%s_net%djb',
-                'relative': '%s_net%dwr',
+                '_relative': '%s_net%dwr',
             }
 
-        for _, row in raw.iterrows():
-            with self.add_ego(self.get_attributes(row, ego_attributes, self.short_code)) as ego_idx:
-                if not ego_idx:
+        # Remove the distance attribute for bf
+        if self.short_code == 'bf':
+            alter_attributes.pop('distance')
+
+        for row_idx, row in raw.iterrows():
+            ego = self.get_attributes(row, ego_attributes, self.short_code)
+            ego['_row_idx'] = row_idx
+            with self.add_ego(ego) as ego_idx:
+                if ego_idx is None:
                     continue
                 for i in range(3):
                     alter = self.get_attributes(row, alter_attributes, self.short_code, i + 1)
+                    alter['_row_idx'] = row_idx
+                    alter['_alter_idx'] = i
                     self.add_alter(alter)
 
         return super(UnderstandingSocietyDataset, self).load()
 
     def feature_map(self, x, y):
-        # Sample distances for controls
-        missing = np.isnan(x['distance'])
-        sampled = 1 + np.random.choice(len(self.distance_proba), len(x), p=self.distance_proba)
-        distance = np.where(missing, sampled, x['distance'])
-
         features = {
             'bias': np.ones(x.shape[0]),
             'sex': x['sex'] != y['sex'],
             'age': np.abs(x['age'] - y['age']),
             'occupation': x['occupation'] != y['occupation'],
-            'distance': distance,
         }
+
+        # Sample distances for controls
+        if 'distance' in x.dtype.fields:
+            missing = np.isnan(x['distance'])
+            sampled = 1 + np.random.choice(len(self.distance_proba), len(x), p=self.distance_proba)
+            distance = np.where(missing, sampled, x['distance'])
+            features['distance'] = distance
 
         # Use mixed-membership distance for ethnicities
         if self.is_usoc:
