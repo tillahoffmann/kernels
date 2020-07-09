@@ -326,6 +326,7 @@ class AmericanLifePanelDataset(dataset.Dataset):
 
     def is_invalid(self, x, ego):
         if not ego:
-            if x['relationship'] in ('partner', 'child', 'parent'):
-                return 'relative: %s' % x['relationship']
+            excluded = ['partner', 'child', 'parent', 'other']
+            if pd.isnull(x['relationship']) or x['relationship'] in excluded:
+                return 'relationship: %s' % x['relationship']
         return super(AmericanLifePanelDataset, self).is_invalid(x, ego)
