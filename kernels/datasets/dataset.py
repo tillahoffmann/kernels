@@ -143,6 +143,7 @@ class Dataset:
             self.alters.append(idx)
             self.z.append(alter)
             self.pairs.append((idx, self.current_ego))
+            return idx
 
     def is_invalid(self, x, ego):
         # Exclude all children
@@ -150,9 +151,10 @@ class Dataset:
         if not pd.isnull(age) and age < 18:
             return 'age < 18'
 
-        if all(map(pd.isnull, x.values())):
+        nulls = [pd.isnull(value) for key, value in x.items() if not key.startswith('_')]
+        if all(nulls):
             return 'all values missing'
-        if any(map(pd.isnull, x.values())):
+        if any(nulls):
             return 'some values missing'
         return False
 
