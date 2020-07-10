@@ -68,10 +68,10 @@ requirements.txt : requirements.in setup.py
 	pip-compile -v
 	pip-sync
 
-tests : requirements.txt
+tests :
 	pytest -v --cov=kernels --cov-report=term-missing --cov-report=html
 
-flake8 : requirements.txt
+flake8 :
 	flake8
 
 clean_all :
