@@ -149,4 +149,6 @@ playground/
 *.out
 *.log
 *.run.xml
-*.synctex.gz
+*.synctex*
+*.dvi
+vancouver.*
