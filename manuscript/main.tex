@@ -61,42 +61,10 @@
 \newtheorem{prop}{Proposition}
 \crefname{prop}{proposition}{propositions}
 
-\newenvironment{choices}
-{
-    \begin{itemize}
-    \setlength{\itemsep}{0pt}
-    \setlength{\parskip}{0pt}
-    \setlength{\parsep}{0pt}
-}
-{\end{itemize}}
-
-\newenvironment{questions}
-{
-    \begin{enumerate}
-    \renewcommand{\theenumi}{\textbf{Q\arabic{enumi}}}
-    \renewcommand{\labelenumi}{\theenumi:}
-    \renewcommand{\labelitemi}{$\circ$}
-    \setlength{\itemsep}{0pt}
-    \setlength{\parskip}{0pt}
-    \setlength{\parsep}{0pt}
-}
-{\end{enumerate}}
-
 \addbibresource{main.bib}
 
-\def\composite{}
-% Useful for word counting
-\ifx\composite\undefined
-  % hide graphics
-  \renewcommand{\includegraphics}[1]{}
-  % hide pagenumber
-  \pagestyle{empty}
-  \renewcommand*{\titlepagestyle}{empty}
-  % hide equations
-  \RenewEnviron{equation}{equation environment}
-  \RenewEnviron{align}{align environment}
-  \RenewEnviron{equation*}{equation* environment}
-\fi
+% Command to highlight changes
+\newcommand{\change}[1]{\textbf{#1}}
 
 % Royal Society Interface Guidance
 % Word-count: 2,500 to 8,000 words including cover page, references, and acknowledgements
@@ -110,6 +78,31 @@
 \begin{document}
 
 \maketitle
+
+\def\composite{composite}
+
+% Useful changes for word counting
+% \def\mywordcount{wordcount}
+\ifdefined\mywordcount
+  % hide graphics
+  \renewcommand{\includegraphics}[1]{}
+  % hide pagenumber
+  \pagestyle{empty}
+  \renewcommand*{\titlepagestyle}{empty}
+  % hide equations
+  \RenewEnviron{equation}{}
+  \RenewEnviron{align}{}
+  \RenewEnviron{equation*}{}
+  \RenewEnviron{multline}{}
+  % hide inline equations
+  \def\[#1\]{}
+  \def\(#1\){}
+  \catcode`\$=13
+  \def$#1${}
+  % hide section numbers
+  % \renewcommand{\section}[1]{\section*{#1}}
+  % \setcounter{secnumdepth}{0}
+\fi
 
 \begin{abstract} % max 200 words
     How people connect with one another is a fundamental question in the social sciences, and the resulting social networks can have a profound impact on our daily lives. Blau offered a powerful explanation: people connect with one another based on their positions in a social space. Yet a principled measure of social distance, allowing comparison within and between societies, remains elusive.
@@ -130,7 +123,7 @@ Homophily can be observed in friendships~\cite{Currarini2009, Hipp2009}, network
 
 Segregation statistics, also referred to as segregation measures, are often used to quantify homophily~\cite{Rodriguez-Moral2016, Bojanowski2014}. Many approaches are based on co-presence in organisational units such as schools~\cite{Orfield2014}, voluntary associations~\cite{Popielarz1999}, occupations~\cite{Charles1995}, or census tracts~\cite{Reardon2004}, and we refer to them as \emph{organisational} statistics. Typically, they compare how the distribution of demographic attributes within organisational units differs from the distribution of attributes in the general population. Whilst organisational statistics are applicable whenever data can be stratified according to a variable of interest, they cannot capture segregation at smaller scales than the strata~\cite{Blumenstock2013}. For example, the ethnic composition of a set of schools may be representative of the general population, indicating that there is no (organisational) segregation. But the social networks \emph{within} schools often exhibit strong ethnic homophily~\cite{Currarini2009,Moody2001}. Organisational statistics cannot capture such social segregation.
 
-\emph{Social} statistics of segregation, such as the assortativity coefficient~\cite{Newman2003a}, overcome these limitations by explicitly considering the interactions amongst individuals~\cite{Blumenstock2013}, but have their own difficulties: first, they usually rely on the existence of discrete groups, such as sex, ethnicity, or religion~\cite{Bojanowski2014}, and they are not applicable to continuous attributes, such as age or income. Attributes are often discretised~\cite{Lam-Morgan2012, Kalmijn2007, Kim2012}, but the boundaries between categories always suffer from some degree of arbitrariness~\cite{Reardon2004}. Second, segregation for multiple attributes can be quantified independently, but it is unclear how to define a composite segregation statistic. Furthermore, social statistics are typically defined as summary statistics of a fully-observed social network. Consequently, we cannot easily quantify uncertainties.
+\emph{Social} statistics of segregation, such as the assortativity coefficient~\cite{Newman2003a}, overcome these limitations by explicitly considering the interactions amongst individuals~\cite{Blumenstock2013}, but have their own difficulties: first, they usually rely on the existence of discrete groups, such as sex, ethnicity, or religion~\cite{Bojanowski2014}, and they are not applicable to continuous attributes, such as age or income. Attributes are often discretised~\cite{Lam-Morgan2012, Kalmijn2007, Kim2012}, but the boundaries between categories always suffer from some degree of arbitrariness~\cite{Reardon2004}. Second, segregation for multiple attributes can be quantified independently, \change{but \textcite{Pelechrinis2016}, who consider a multivariate generalisation of the assortativity coefficient, note that ``a formal metric that is generally applicable'' remains elusive.} Furthermore, social statistics are typically defined as summary statistics of a fully-observed social network. Consequently, we cannot easily quantify uncertainties.
 
 In practice, the study of homophily is complicated by the scarcity of high-quality data~\cite{Butts2012, Blumenstock2013}: we need social network data together with demographic information for each person. Online social networks and the widespread use of mobile phones provide us with detailed information about connections between individuals~\cite{Golder2014}, and seemingly private traits such as socioeconomic status~\cite{Blumenstock2015, Luo2017}, sexual orientation~\cite{Wang2017}, age, gender, and political ideology can be inferred~\cite{Kosinski2013}. Unfortunately, network features are often used to predict demographic attributes~\cite{Wang2013,Blumenstock2015,Luo2017,Kosinski2013}, which would confound any study of homophily. Furthermore, data are too revealing in terms of privacy but, at the same time, do not provide enough information for researchers~\cite{Golder2014}. Individuals can be identified in anonymised social networks~\cite{Backstrom2011, Narayanan2008}, and augmenting the network data with demographic information would make re-identification even easier.
 
@@ -154,12 +147,12 @@ We have so far emphasised the desirability of metrics on social spaces with a un
 
 In addition to addressing the challenges mentioned in \cref{sec:introduction}, a social segregation statistic should satisfy the following properties: first, the statistic should be insensitive to the overall edge density to facilitate comparison of segregation across different networks. Otherwise, the segregation statistic would depend on the size of the population because the edge density scales as $n^{-1}$ if the average degree is approximately constant. Second, following \textcite{Freeman1978}, we would like the statistic to capture the notion that segregation places ``restrictions on the access of people to one another''. Third, the statistic should be easily interpretable, and it should have a natural notion of the absence of segregation when individuals form connections without regard to their positions in Blau space. For example, the difference of within- and between-group ties considered by \textcite{Krackhardt1988} depends on the sizes of the groups even if there is no homophily: there is no natural reference point.
 
-A single statistic cannot capture the complexities of social networks, and we develop a family of statistics applicable at different scales: the social separation between any two individuals, the isolation experienced by any one individual, and the social strain experienced by society as a whole. Starting at the microscopic level, we use the generative model to define a statistic of \emph{social separation} between two individuals with attributes $x$ and $y$:
+A single statistic cannot capture the complexities of social networks, and we develop a family of statistics applicable at different scales: \change{(a)~the \emph{social separation} between any two individuals, (b)~the \emph{isolation} experienced by any one individual, and (c)~the \emph{social strain} experienced by society as a whole.} Starting at the microscopic level, \change{we define the \emph{social separation} between two individuals $i$ and $j$ with attributes $x$ and $y$ as the relative log odds for $j$ to connect with $i$ compared someone who is alike: the log odds intuitively capture the probabilistic nature of the conditionally independent edge model. In particular,}
 \begin{align}
     \varphi(x, y) &= \logit \rho(y,y) - \logit\rho(x,y),\label{eq:social-separation}\\
     \text{where }\logit\rho &= \log\left(\frac{\rho}{1-\rho}\right)\nonumber
 \end{align}
-are the log odds for a connection to form with probability $\rho$. The probability $\rho(y, y)$ for an individual with attributes $y$ to connect with someone with identical attributes serves as a reference point, and the statistic does not depend on the overall edge density. The social separation $\varphi$ may be understood as the isolation experienced by an individual with attributes $x$ as a result of the behaviour of another with attributes $y$. The statistic is zero if people do not discriminate with respect to the attributes on which they differ or if two individuals have the same demographic attributes. For a homophilous connectivity kernel, the statistic is positive and is a \emph{semi-metric} for Blau space; we will consider a family of connectivity kernels for which $\varphi$ is a true metric in \cref{sec:segregation-distance}.
+are the log odds for a connection to form with probability $\rho$\change{~\cite{Hastie2009}}. The probability $\rho(y, y)$ for \change{$j$ to connect with someone who is alike} serves as a reference point, and the statistic does not depend on the overall edge density. The social separation $\varphi$ may be understood as the isolation experienced by \change{$i$ with attributes $x$ as a result of the behaviour of $j$ with attributes $y$}. The statistic is zero if people do not discriminate with respect to the attributes on which they differ or if two individuals have the same demographic attributes. For a homophilous connectivity kernel, the statistic is positive and is a \emph{semi-metric} for Blau space; we will consider a family of connectivity kernels for which $\varphi$ is a true metric in \cref{sec:segregation-distance}.
 
 \begin{prop}\label{prop:segregations-semi-metric}
     If the connectivity kernel is homophilious, symmetric, and the probability $\rho(x,x)$ to connect with others who are alike is independent of $x$, the social separation $\varphi$ is a \emph{semimetric}~\cite{Wilson1931}: it satisfies the properties of a metric, including non-negativity, symmetry, and the identity of indiscernables---except the triangle inequality.
@@ -186,7 +179,7 @@ which quantifies the average social separation between an individual with attrib
 \begin{equation}
     \phi(x) = (1-P(x))\left(\logit\rho_\mathrm{same}-\logit\rho_\mathrm{different}\right),\label{eq:segregation-individual-sbm}
 \end{equation}
-where $P(x)$ is the probability to belong to block $x$, and we have used the identity $\sum_{y=1}^K P(y)\left(1-\delta_{xy}\right)= 1 - P(x)$. Members of all blocks experience the same degree of isolation if the blocks are of the same size. If the sizes are unequal, minorities experience more isolation and majority groups experience less isolation. Indeed, ethnic minorities in schools tend to be more isolated and have fewer social ties~\cite{Currarini2009}.
+where $P(x)$ is the probability to belong to block $x$, and we have used the identity $\sum_{y=1}^K P(y)\left(1-\delta_{xy}\right)= 1 - P(x)$. Members of all blocks experience the same degree of isolation if the blocks are of the same size. If the sizes are unequal, minorities experience more isolation and majority groups experience less isolation. Indeed, ethnic minorities in schools tend to be more isolated and have fewer social ties~\cite{Currarini2009}. \change{The off-diagonal terms of the Hessian of the social isolation $\phi$ quantify interactions, such as the joint effect of age and ethnic differences.}
 
 To understand how segregated society is as a whole, we would like to aggregate the social isolation $\phi$, but the appropriate statistic depends on the question at hand. For example, if we wanted to study the most isolated subpopulation of society, we should consider $\max_{x\in\blauspace}\phi(x)$. Here, we take a utilitarian approach and, in line with \cref{eq:segregation-individual}, define the \emph{social strain} as
 \begin{equation}
@@ -205,7 +198,7 @@ The social separation takes a simple form if the probability for two individuals
 \begin{equation}
     \logit\rho(x, y, \theta) = \sum_{l=1}^p\theta_l f_l(x,y),\label{eq:logistic-kernel}
 \end{equation}
-where the $p$-dimensional vector $\theta_l$ parametrises the kernel, and $f(x, y)$ is a set of $p$-dimensional features that are predictive of the connection probability, such as the age difference $f_\text{age}=\abs{x_\mathrm{age}-y_\mathrm{age}}$. The social separation between $x$ and $y$ comprises contributions from the features of the logistic kernel:
+where the $p$-dimensional vector $\theta_l$ parametrises the kernel, and $f(x, y)$ is a set of $p$-dimensional features that are predictive of the connection probability, such as the age difference $f_\text{age}=\abs{x_\mathrm{age}-y_\mathrm{age}}$. \change{Intersectionality can be accounted for by including interaction terms in the feature set.} The social separation between $x$ and $y$ comprises contributions from the features of the logistic kernel:
 \begin{align}
     \varphi(x,y) &= \sum_{l=1}^p\varphi_l(x, y),\label{eq:social-separation-logistic}\\
     \text{where }\varphi_l(x, y) &= \theta_l\left(f_l(y, y) - f_l(x, y)\right)\label{eq:social-separation-contribution}
@@ -342,28 +335,32 @@ As might be expected based on previous studies~\cite{Lambiotte2008, Expert2011, 
 
 \section{Discussion\label{sec:discussion}}
 
-We considered a generative model for social networks embedded in Blau space, a space spanned by the demographic attributes of members of society. We developed a family of segregation statistics with a universal scale (since they are based on the common notion of the probability of a social tie) facilitating comparison between datasets collected at different times or in different cultural contexts. Furthermore, the segregation statistics are applicable to mixed attribute types, have a natural reference point, and an intuitive interpretation: the probability to form connections decreases with increasing segregation. For certain logistic connectivity kernels, the social separation is a metric for Blau space and allows us to quantify social distance in a principled fashion.
+We considered a generative model for social networks embedded in Blau space, a space spanned by the demographic attributes of members of society. We developed a family of segregation statistics with a universal scale (since they are based on the common notion of the probability of a social tie), facilitating comparison between datasets collected at different times or in different cultural contexts. Furthermore, the segregation statistics are applicable to mixed attribute types, have a natural reference point, and an intuitive interpretation: the probability to form connections decreases with increasing segregation. \change{They are applicable at different resolutions: connections, individuals, and society as a whole.} For certain logistic connectivity kernels, the social separation is a metric for Blau space and allows us to quantify social distance in a principled fashion. \change{The model-based approach facilitates the study of segregation in synthetic social networks, the effect of interventions, and principled quantification of uncertainties in an applied setting.}
 
 Based on eleven ego network datasets collected in the United Kingdom and United States, we inferred the connectivity kernel $\rho(x,y)$, i.e.\ the probability for an individual with demographic attributes $x$ to connect with another with attributes $y$. Using the kernel, we compared segregation across different datasets along different demographic dimensions and found that physical distance and age have the most significant impact on how well society is connected. We used the Blau space metric to evaluate the social distance amongst respondents of the GSS and USS. Using a lower-dimensional embedding of the respondents, we explored Blau space, corroborating our findings that age has a profound impact on restricting friendship formation.
 
-The importance of physical distance highlights that our suite of segregation statistics does not distinguish between \emph{choice homophily} and \emph{opportunistic homophily}~\cite{Franz2010}. The former is a result of individuals having an active preference to connect with others who are alike, whereas the latter is a result of individuals being exposed to others who are similar to them. Opportunistic homophily is likely to be a large contributing factor to spatial homophily because individuals are less likely to encounter people who live far from them.
+The importance of physical distance highlights that our suite of segregation statistics does not distinguish between \emph{choice homophily} and \emph{opportunistic homophily}~\cite{Franz2010}. The former is a result of individuals having an active preference to connect with others who are alike, whereas the latter is a result of individuals being exposed to others who are similar to them. Opportunistic homophily is likely to be a large contributing factor to spatial homophily because individuals are less likely to encounter people who live far from them. \change{Similarly, the statistics do not discriminate between choice homophily and \emph{social influence}, i.e.\ the tendency for people to become more alike given a connection~\cite{Shalizi2011}.}
+
+\change{Other features, including sex, ethnicity, religion, education, and occupation, have smaller effects on the presence of connections. Notably, the social strain due to ethnicity in the GSS and ALP is larger than in the USS: first, the effect of ethnicity is more pronounced in the US, as shown in \cref{fig:parameters-and-age-equivalents}. Second, society in the US is more ethnically diverse than in the UK (79\% white in GSS '04 compared with 89\% white in USS '14), increasing strain on average, as exemplified with a SBM in \cref{sec:model-based-segregation}.}
 
 Even though we did not expect the kernel parameters to be consistent across countries, time, or even different surveys, people connected with one another in a surprisingly similar fashion across the different datasets (the BHPS and USS are longitudinal studies such that consistent parameter estimates are less surprising). Our observations, together with a study by \textcite{Mossong2008} finding that ``mixing patterns [\ldots] were remarkably similar across different European countries'', suggest that connectivity kernels for friendships vary little across societies and time. To test this hypothesis, further surveys should be conducted in a unified fashion to minimise the effects of question wording and how the survey is administered~\cite{Eagle2015}. In particular, such surveys should explore options to explicitly incentivise nominees to provide data about themselves~\cite{Biernacki1981}: seeds may not recall certain attributes, or nominees may deliberately portray themselves inaccurately~\cite{Bruch2016}. Questions regarding ethnicity should allow respondents to provide multiple answers such that people with mixed ethnic backgrounds can express their identity. Rather than asking respondents about potentially sensitive information, such as income, proxy information that is more readily available---and potentially more informative of how individuals interact with society---could be collected~\cite{Po2012}. Whenever possible, aggregation of attributes such as age into bins should be avoided because it limits the ability to infer kernel parameters~\cite{Hutcheon2010}, as we saw in \cref{sec:survey-alp}. Connectivity kernels should be inferred jointly for all dimensions of Blau space to control for social preferences on correlated attributes.
 
-The connectivity kernel is an intuitive model of how people connect with one another, and it is able to reproduce some of the statistics of real social networks. For example, people in high-density regions of Blau space have been observed to have more connections~\cite{Currarini2009}. However, exponential random graph models may be able to better capture the nature of social networks~\cite{Wimmer2010}. Furthermore, we have used a connectivity kernel that: (a)~is symmetric and cannot identify whether there is a status order in society~\cite{Chan2004,Ball2013}, and (b)~only depends on differences between individuals. For example, young men tend to have more social contacts than young women, and older women have more social contacts than older men~\cite{Bhattacharya2016}---an observation that cannot be captured by a kernel of the form we have considered. The connectivity kernel could be refined by adding the demographic attributes of the seeds and nominees as features, capturing sociability and popularity, respectively. Furthermore, it should be determined whether the number of ``intervening opportunities''~\cite{Stouffer1940}, absolute distance in Blau space, or a hybrid thereof are most predictive of tie probability. Ultimately, learning a connectivity kernel without a pre-specified parametric form should be considered~\cite{Frolich2006}. We note that, irrespective of the choice of connectivity kernel, the interpretable segregation statistics considered here remain valid and useful.
+The connectivity kernel is an intuitive model of how people connect with one another, and it is able to reproduce some of the statistics of real social networks. For example, people in high-density regions of Blau space have been observed to have more connections~\cite{Currarini2009}. However, exponential random graph models may be able to better capture the nature of social networks~\cite{Wimmer2010}. Furthermore, we have used a connectivity kernel that: (a)~is symmetric and cannot identify whether there is a status order in society~\cite{Chan2004,Ball2013}, and (b)~only depends on differences between individuals. For example, young men tend to have more social contacts than young women, and older women have more social contacts than older men~\cite{Bhattacharya2016}---an observation that cannot be captured by a kernel of the form we have considered. The connectivity kernel could be refined by adding the demographic attributes of the seeds and nominees as features, capturing sociability and popularity, respectively. Furthermore, it should be determined whether the number of ``intervening opportunities''~\cite{Stouffer1940}, absolute distance in Blau space, or a hybrid thereof are most predictive of tie probability. Ultimately, learning a connectivity kernel without a pre-specified parametric form should be considered~\cite{Frolich2006} \change{because they can better capture complex patterns, such as interactions between different demographic attributes}. We note that, irrespective of the choice of connectivity kernel, the interpretable segregation statistics considered here remain valid and useful.
 
 \section*{Acknowledgements}
 
-We would like to thank Sahil Loomba for useful feedback on the manuscript and acknowledge support from the grant EP/N014529/1.
+We would like to thank Sahil Loomba \change{and two anonymous referees} for useful feedback on the manuscript and acknowledge support from the grant EP/N014529/1.
 
 \printbibliography
 \end{refsection}
 
 \ifdefined\composite
 \pagebreak
+\setcounter{page}{1}
 \noindent{\titlefont\huge Supplementary material}
 
 \appendix
+\vspace{1em}\noindent\change{The code to reproduce the results and figures is available at \url{https://github.com/tillahoffmann/kernels}.}
 \numberwithin{equation}{section}
 \numberwithin{figure}{section}
 \numberwithin{table}{section}
