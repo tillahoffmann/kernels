@@ -1,79 +1,84 @@
-\documentclass{scrartcl}
-\usepackage{authblk}
-\usepackage{amsmath}
-\usepackage{amssymb}
-\usepackage{amsthm}
-\usepackage{csquotes}
-\usepackage[british]{babel}
-\usepackage[
-    giveninits,
-    backend=biber,
-    sorting=none,
-    citestyle=numeric-comp,
-    maxnames=10,
-    style=vancouver,
-]{biblatex}
-\usepackage{xr-hyper}
-\usepackage{hyperref}
-\usepackage{tabularx}
-\usepackage{booktabs}
-\usepackage{cleveref}
-\usepackage{fmtcount}
-\usepackage{environ}
-\usepackage{graphicx}
-\DeclareGraphicsExtensions{.pdf}
+\ifx\master\undefined
+    \documentclass{scrartcl}
+    \usepackage{authblk}
+    \usepackage{amsmath}
+    \usepackage{amssymb}
+    \usepackage{amsthm}
+    \usepackage{csquotes}
+    \usepackage[british]{babel}
+    \usepackage[
+        giveninits,
+        backend=biber,
+        sorting=none,
+        citestyle=numeric-comp,
+        maxnames=10,
+        style=vancouver,
+    ]{biblatex}
+    \usepackage{xr-hyper}
+    \usepackage{hyperref}
+    \usepackage{tabularx}
+    \usepackage{booktabs}
+    \usepackage{cleveref}
+    \usepackage{fmtcount}
+    \usepackage{environ}
+    \usepackage{graphicx}
+    \DeclareGraphicsExtensions{.pdf}
 
-\externaldocument{main}
+    \externaldocument{main}
 
-\usepackage[usenames]{xcolor}
-\definecolor{mpl0}{HTML}{1f77b4}
+    \usepackage[usenames]{xcolor}
+    \definecolor{mpl0}{HTML}{1f77b4}
 
-\hypersetup{
-    colorlinks=true,
-    linkcolor=mpl0,
-    citecolor=mpl0,
-    urlcolor=mpl0,
-}
+    \hypersetup{
+        colorlinks=true,
+        linkcolor=mpl0,
+        citecolor=mpl0,
+        urlcolor=mpl0,
+    }
 
-\newcommand{\expit}{\sigma}
-\newcommand{\transpose}[1]{#1^\intercal}
-\DeclareMathOperator{\logit}{logit}
-\DeclareMathOperator{\logp}{log1p}
-\DeclareMathOperator{\logsumexp}{logsumexp}
+    \newcommand{\expit}{\sigma}
+    \newcommand{\transpose}[1]{#1^\intercal}
+    \DeclareMathOperator{\logit}{logit}
+    \DeclareMathOperator{\logp}{log1p}
+    \DeclareMathOperator{\logsumexp}{logsumexp}
 
-\newcommand{\abs}[1]{\left|#1\right|}
-\newcommand{\card}[1]{\left|#1\right|}
-\newcommand{\population}{N}
-\newcommand{\seeds}{U}
-\newcommand{\blauspace}{\mathbb{B}}
-\newcommand{\twocol}[1]{\multicolumn{2}{>{\hsize=\dimexpr2\hsize+3\tabcolsep+2\arrayrulewidth\relax}X}{#1}}
+    \newcommand{\abs}[1]{\left|#1\right|}
+    \newcommand{\card}[1]{\left|#1\right|}
+    \newcommand{\population}{N}
+    \newcommand{\seeds}{U}
+    \newcommand{\blauspace}{\mathbb{B}}
+    \newcommand{\twocol}[1]{\multicolumn{2}{>{\hsize=\dimexpr2\hsize+3\tabcolsep+2\arrayrulewidth\relax}X}{#1}}
 
-\newcommand{\titlecaption}[2]{\caption[#1]{\emph{#1} #2}}
-\newtheorem{prop}{Proposition}
-\crefname{prop}{proposition}{propositions}
+    \newcommand{\titlecaption}[2]{\caption[#1]{\emph{#1} #2}}
+    \newtheorem{prop}{Proposition}
+    \crefname{prop}{proposition}{propositions}
 
-\addbibresource{main.bib}
+    \addbibresource{main.bib}
 
 
-% Royal Society Interface Guidance
-% Word-count: 2,500 to 8,000 words including cover page, references, and acknowledgements
+    % Royal Society Interface Guidance
+    % Word-count: 2,500 to 8,000 words including cover page, references, and acknowledgements
 
-\title{Supplementary material}
-%\author{Till Hoffmann}
-%\author{Nick S. Jones}
-%\affil{Department of Mathematics, Imperial College London}
-\author{}
-\date{}
-%Buzz words -- inference, universal social scale, segregation measures, social kernel
-\begin{document}
+    \title{Supplementary material}
+    %\author{Till Hoffmann}
+    %\author{Nick S. Jones}
+    %\affil{Department of Mathematics, Imperial College London}
+    \author{}
+    \date{}
+    %Buzz words -- inference, universal social scale, segregation measures, social kernel
+    \begin{document}
 
-\maketitle
-The code to reproduce the results and figures is available at \url{https://github.com/tillahoffmann/kernels}.
+    \maketitle
+\fi
 
 \appendix
 \numberwithin{equation}{section}
 \numberwithin{figure}{section}
 \numberwithin{table}{section}
+
+\begin{refsection}
+
+The code to reproduce the results and figures is available at \url{https://github.com/tillahoffmann/kernels}.
 
 \section{Evaluation of the observed-data log-likelihood}
 
@@ -212,4 +217,8 @@ where $E$ is the set of attributes encoding ethnic identity, and ethnicity membe
 
 \printbibliography
 
+\end{refsection}
+
+\ifx\master\undefined
 \end{document}
+\fi
