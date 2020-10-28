@@ -4,7 +4,9 @@ kernels
 .. image:: https://github.com/tillahoffmann/kernels/workflows/CI/badge.svg
   :target: https://github.com/tillahoffmann/kernels/actions
 
-A package to (a) infer conditionally-independent edge models from ego networks collected in surveys and (b) evaluate a family of segregation measures for individuals, pairs of individuals, and society as a whole. See "`Inference of a universal social scale and segregation measures using social connectivity kernels <https://arxiv.org/abs/2008.05337>`__" for a detailed discussion.
+A package to (a) infer conditionally-independent edge models from ego networks collected in surveys and (b) evaluate a family of segregation measures for individuals, pairs of individuals, and society as a whole. See the accompanying publication for details.
+
+   Hoffmann Till and Jones Nick S. 2020 Inference of a universal social scale and segregation measures using social connectivity kernels. *J. R. Soc. Interface.* **17**: 20200638 `10.1098/rsif.2020.0638 <http://doi.org/10.1098/rsif.2020.0638>`__.
 
 Obtaining data for reproducing results
 --------------------------------------
